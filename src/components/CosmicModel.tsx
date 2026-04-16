@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Magnet, Zap, Wind, ShieldAlert, Play, Pause, RotateCcw, X } from 'lucide-react';
+import { Magnet, Zap, Wind, ShieldAlert, Play, Pause, RotateCcw, X, Info } from 'lucide-react';
+import TheoryPanel from './TheoryPanel';
 
 interface Particle {
   x: number;
@@ -13,10 +14,15 @@ interface Particle {
   speedMult: number;
 }
 
-export const CosmicModel: React.FC = () => {
+export const CosmicModel: React.FC<{ isReducedMotion?: boolean; isHighVis?: boolean; onAnnounce?: (msg: string) => void }> = ({ isReducedMotion, isHighVis, onAnnounce }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [mode, setMode] = useState<'state' | 'nomad' | 'nonstate' | 'conflict'>('state');
+
+  // Trigger announcement on mode change
+  useEffect(() => {
+    onAnnounce?.(`Cosmic Model switched to ${mode} mode`);
+  }, [mode, onAnnounce]);
   const [intensity, setIntensity] = useState(0.2);
   const [particleCount, setParticleCount] = useState(150);
   const [wardingCount, setWardingCount] = useState(8);
@@ -28,6 +34,7 @@ export const CosmicModel: React.FC = () => {
   const [nomadIntensity, setNomadIntensity] = useState(0.1);
   const [nomadSize, setNomadSize] = useState(2);
   const [showControls, setShowControls] = useState(true);
+  const [showTheory, setShowTheory] = useState(false);
   
   const particles = useRef<Particle[]>([]);
   const animationFrameId = useRef<number>(0);
@@ -195,6 +202,8 @@ export const CosmicModel: React.FC = () => {
         let forceX = 0;
         let forceY = 0;
 
+        const motionScale = isReducedMotion ? 0.2 : 1.0;
+
         // 1. Non-State Anti-Gravity (Warding Voids)
         let isWarded = false;
         wardingZones.forEach(z => {
@@ -209,13 +218,13 @@ export const CosmicModel: React.FC = () => {
             const rd = Math.sqrt(rdx * rdx + rdy * rdy);
             
             // Inverse relationship for explosive push-out
-            const antiGForce = (1 - rd / z.r) * currentAntiG * currentIntensity * 12;
+            const antiGForce = (1 - rd / z.r) * currentAntiG * currentIntensity * 12 * motionScale;
             forceX += (rdx / rd) * antiGForce;
             forceY += (rdy / rd) * antiGForce;
             
             // Deterritorializing Jitter (High intensity)
-            forceX += (Math.random() - 0.5) * 3;
-            forceY += (Math.random() - 0.5) * 3;
+            forceX += (Math.random() - 0.5) * 3 * motionScale;
+            forceY += (Math.random() - 0.5) * 3 * motionScale;
           }
         });
 
@@ -230,8 +239,8 @@ export const CosmicModel: React.FC = () => {
             if (dist_c < effectiveOrbitalRadius + 150) {
               // Inverse-Square Gravity Attenuation
               const gravityPull = (currentG * 5000) / (dist_c * dist_c + 1000);
-              forceX += (dx_c / dist_c) * gravityPull * currentIntensity;
-              forceY += (dy_c / dist_c) * gravityPull * currentIntensity;
+              forceX += (dx_c / dist_c) * gravityPull * currentIntensity * motionScale;
+              forceY += (dy_c / dist_c) * gravityPull * currentIntensity * motionScale;
 
               // Circular Orbit Physics (Striation)
               const angleToCenter = Math.atan2(dy_c, dx_c);
@@ -244,8 +253,8 @@ export const CosmicModel: React.FC = () => {
               const targetRadius = Math.round(dist_c / shellSpacing) * shellSpacing;
               const radialForce = (targetRadius - dist_c) * 0.1 * currentIntensity;
 
-              forceX += (targetVx - p.vx) * 0.08 + (dx_c / dist_c) * radialForce;
-              forceY += (targetVy - p.vy) * 0.08 + (dy_c / dist_c) * radialForce;
+              forceX += ((targetVx - p.vx) * 0.08 + (dx_c / dist_c) * radialForce) * motionScale;
+              forceY += ((targetVy - p.vy) * 0.08 + (dy_c / dist_c) * radialForce) * motionScale;
               
               if (Math.abs(dist_c - targetRadius) < 15) isCapturedByState = true;
             }
@@ -263,13 +272,13 @@ export const CosmicModel: React.FC = () => {
           const tx = Math.cos(chaoticAngle);
           const ty = Math.sin(chaoticAngle);
           
-          const transversalForce = currentNomadIntensity * currentIntensity * 4 * p.speedMult;
+          const transversalForce = currentNomadIntensity * currentIntensity * 4 * p.speedMult * motionScale;
           forceX += tx * transversalForce;
           forceY += ty * transversalForce;
           
           // High-intensity jitter to break capture
-          forceX += (Math.random() - 0.5) * currentNomadIntensity * 5;
-          forceY += (Math.random() - 0.5) * currentNomadIntensity * 5;
+          forceX += (Math.random() - 0.5) * currentNomadIntensity * 5 * motionScale;
+          forceY += (Math.random() - 0.5) * currentNomadIntensity * 5 * motionScale;
           
           // If it's a nomad takeover, it overrides capture
           if (isNomadTakeover) p.isCaptured = false;
@@ -344,19 +353,45 @@ export const CosmicModel: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => setShowControls(!showControls)}
-            className={`px-3 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all brutal-shadow-sm ${showControls ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            onClick={() => {
+              const newPlaying = !isPlaying;
+              setIsPlaying(newPlaying);
+              onAnnounce?.(`Simulation ${newPlaying ? 'resumed' : 'paused'}`);
+            }}
+            className={`p-2 border-2 border-xerox-ink transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center ${isPlaying ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            aria-label={isPlaying ? "Pause Simulation" : "Play Simulation"}
           >
-            {showControls ? 'Hide Controls' : 'Show Controls'}
+            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+          </button>
+          <button 
+            onClick={() => {
+              setShowTheory(true);
+              onAnnounce?.("Opened technical manual");
+            }}
+            className={`p-2 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center bg-xerox-bg text-xerox-ink`}
+            aria-label="View Technical Equations"
+          >
+            <Info className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => {
+              setShowControls(!showControls);
+              onAnnounce?.(`${!showControls ? 'Opened' : 'Closed'} simulation controls`);
+            }}
+            className={`px-3 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-sm' : 'text-[10px]'} font-black uppercase transition-all brutal-shadow-sm min-h-[44px] ${showControls ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            aria-label={showControls ? "Hide Controls" : "Show Controls"}
+            aria-expanded={showControls}
+          >
+            {showControls ? 'Hide' : 'Controls'}
           </button>
         </div>
       </div>
 
       <div className="relative flex-1 bg-black flex overflow-hidden min-h-0">
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden" role="img" aria-label={`Cosmic Metaphysics Simulation: An orbital visualization showing ${mode} captures and chaotic transversal flows.`}>
           <canvas 
             ref={canvasRef} 
-            className="w-full h-full xerox-effect"
+            className={`w-full h-full ${isHighVis ? '' : 'xerox-effect'}`}
           />
         </div>
         
@@ -374,31 +409,31 @@ export const CosmicModel: React.FC = () => {
               <div className="space-y-6">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between border-b-2 border-xerox-ink pb-1">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Operational Mode</span>
+                    <span className={`${isHighVis ? 'text-xs' : 'text-[10px]'} font-black uppercase tracking-[0.2em]`}>Operational Mode</span>
                     <span className="text-[8px] font-bold opacity-40">SELECT_ONE</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button 
                       onClick={() => setMode('state')}
-                      className={`px-2 py-2 border-2 border-xerox-ink text-[10px] font-black uppercase transition-all ${mode === 'state' ? 'bg-xerox-cyan text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-cyan'}`}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[10px]'} font-black uppercase transition-all ${mode === 'state' ? 'bg-xerox-cyan text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-cyan'}`}
                     >
                       STATE
                     </button>
                     <button 
                       onClick={() => setMode('nomad')}
-                      className={`px-2 py-2 border-2 border-xerox-ink text-[10px] font-black uppercase transition-all ${mode === 'nomad' ? 'bg-xerox-magenta text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-magenta hover:text-xerox-bg'}`}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[10px]'} font-black uppercase transition-all ${mode === 'nomad' ? 'bg-xerox-magenta text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-magenta hover:text-xerox-bg'}`}
                     >
                       NOMAD
                     </button>
                     <button 
                       onClick={() => setMode('nonstate')}
-                      className={`px-2 py-2 border-2 border-xerox-ink text-[10px] font-black uppercase transition-all ${mode === 'nonstate' ? 'bg-xerox-yellow text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-yellow'}`}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[10px]'} font-black uppercase transition-all ${mode === 'nonstate' ? 'bg-xerox-yellow text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-yellow'}`}
                     >
                       NON-STATE
                     </button>
                     <button 
                       onClick={() => setMode('conflict')}
-                      className={`px-2 py-2 border-2 border-xerox-ink text-[10px] font-black uppercase transition-all ${mode === 'conflict' ? 'bg-xerox-accent text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-accent hover:text-xerox-bg'}`}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[10px]'} font-black uppercase transition-all ${mode === 'conflict' ? 'bg-xerox-accent text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-accent hover:text-xerox-bg'}`}
                     >
                       CONFLICT
                     </button>
@@ -407,15 +442,15 @@ export const CosmicModel: React.FC = () => {
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between border-b-2 border-xerox-ink pb-1">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Parameters</span>
+                    <span className={`${isHighVis ? 'text-xs' : 'text-[10px]'} font-black uppercase tracking-[0.2em]`}>Parameters</span>
                     <span className="text-[8px] font-bold opacity-40">ADJUST_VECTORS</span>
                   </div>
                   
                   <div className="space-y-3">
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-xerox-magenta">Nomad Density</span>
-                        <span className="text-[9px] font-mono font-bold">{particleCount}</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Nomad Density</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{particleCount}</span>
                       </div>
                       <input 
                         type="range" min="50" max="500" step="10" 
@@ -427,8 +462,8 @@ export const CosmicModel: React.FC = () => {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-xerox-magenta">Nomad Intensity</span>
-                        <span className="text-[9px] font-mono font-bold">{(nomadIntensity * 100).toFixed(0)}%</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Nomad Intensity</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{(nomadIntensity * 100).toFixed(0)}%</span>
                       </div>
                       <input 
                         type="range" min="0.1" max="2" step="0.1" 
@@ -440,8 +475,8 @@ export const CosmicModel: React.FC = () => {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-xerox-magenta">Nomad Size</span>
-                        <span className="text-[9px] font-mono font-bold">{nomadSize}px</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Nomad Size</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{nomadSize}px</span>
                       </div>
                       <input 
                         type="range" min="0" max="20" step="0.5" 
@@ -453,8 +488,8 @@ export const CosmicModel: React.FC = () => {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-xerox-cyan">State Count</span>
-                        <span className="text-[9px] font-mono font-bold">{stateCount}</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest text-xerox-cyan`}>State Count</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{stateCount}</span>
                       </div>
                       <input 
                         type="range" min="1" max="3" step="1" 
@@ -466,8 +501,8 @@ export const CosmicModel: React.FC = () => {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-xerox-cyan">Orbital Radius</span>
-                        <span className="text-[9px] font-mono font-bold">{orbitalRadius}px</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest text-xerox-cyan`}>Orbital Radius</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{orbitalRadius}px</span>
                       </div>
                       <input 
                         type="range" min="50" max="800" step="10" 
@@ -479,8 +514,8 @@ export const CosmicModel: React.FC = () => {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-xerox-cyan">Gravity Constant</span>
-                        <span className="text-[9px] font-mono font-bold">{(gravitationalConstant * 100).toFixed(0)}%</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest text-xerox-cyan`}>Gravity Constant</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{(gravitationalConstant * 100).toFixed(0)}%</span>
                       </div>
                       <input 
                         type="range" min="0.1" max="2" step="0.1" 
@@ -492,8 +527,8 @@ export const CosmicModel: React.FC = () => {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-xerox-yellow">Anti-Gravity Strength</span>
-                        <span className="text-[9px] font-mono font-bold">{(antiGravityStrength * 100).toFixed(0)}%</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest text-xerox-yellow`}>Anti-Gravity Strength</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{(antiGravityStrength * 100).toFixed(0)}%</span>
                       </div>
                       <input 
                         type="range" min="0" max="2" step="0.1" 
@@ -505,8 +540,8 @@ export const CosmicModel: React.FC = () => {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-xerox-yellow">Warding Count</span>
-                        <span className="text-[9px] font-mono font-bold">{wardingCount}</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest text-xerox-yellow`}>Warding Count</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{wardingCount}</span>
                       </div>
                       <input 
                         type="range" min="1" max="40" step="1" 
@@ -518,8 +553,8 @@ export const CosmicModel: React.FC = () => {
 
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black uppercase tracking-widest text-xerox-yellow">Warding Size</span>
-                        <span className="text-[9px] font-mono font-bold">{wardingSize}px</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest text-xerox-yellow`}>Warding Size</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{wardingSize}px</span>
                       </div>
                       <input 
                         type="range" min="0" max="400" step="5" 
@@ -531,8 +566,8 @@ export const CosmicModel: React.FC = () => {
 
                     <div className="pt-2 border-t border-xerox-ink/20">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-black uppercase tracking-widest">Global Intensity</span>
-                        <span className="text-[9px] font-mono font-bold">{(intensity * 100).toFixed(0)}%</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-black uppercase tracking-widest`}>Global Intensity</span>
+                        <span className={`${isHighVis ? 'text-[10px]' : 'text-[9px]'} font-mono font-bold`}>{(intensity * 100).toFixed(0)}%</span>
                       </div>
                       <input 
                         type="range" min="0.1" max="1" step="0.05" 
@@ -547,7 +582,7 @@ export const CosmicModel: React.FC = () => {
                 <div className="pt-2">
                   <button 
                     onClick={() => initParticles(canvasRef.current?.width || 0, canvasRef.current?.height || 0, particleCount)}
-                    className="w-full py-3 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest"
+                    className={`w-full py-3 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm flex items-center justify-center gap-2 ${isHighVis ? 'text-xs' : 'text-[10px]'} font-black uppercase tracking-widest`}
                   >
                     <RotateCcw className="w-4 h-4" />
                     Reset Simulation
@@ -593,6 +628,13 @@ export const CosmicModel: React.FC = () => {
           <span>Particles: {particleCount}</span>
         </div>
       </div>
+
+      <TheoryPanel 
+        modelType="cosmic" 
+        isOpen={showTheory} 
+        onClose={() => setShowTheory(false)}
+        isHighVis={isHighVis}
+      />
     </div>
   );
 };

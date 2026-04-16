@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Flame, Zap, Wind, Shield, Play, Pause, RotateCcw, X } from 'lucide-react';
+import { Flame, Zap, Wind, Shield, Play, Pause, RotateCcw, X, Info } from 'lucide-react';
+import TheoryPanel from './TheoryPanel';
 
 interface Atom {
   x: number;
@@ -10,10 +11,15 @@ interface Atom {
   intensity: number;
 }
 
-export const MetallurgicModel: React.FC = () => {
+export const MetallurgicModel: React.FC<{ isReducedMotion?: boolean; isHighVis?: boolean; onAnnounce?: (msg: string) => void }> = ({ isReducedMotion, isHighVis, onAnnounce }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [mode, setMode] = useState<'state' | 'nomad' | 'nonstate' | 'conflict'>('state');
+
+  // Trigger announcement on mode change
+  useEffect(() => {
+    onAnnounce?.(`Metallurgic Model switched to ${mode} mode`);
+  }, [mode, onAnnounce]);
   const [intensity, setIntensity] = useState(0.4);
   const [particleCount, setParticleCount] = useState(1200);
   const [latticeStability, setLatticeStability] = useState(0.1);
@@ -22,6 +28,7 @@ export const MetallurgicModel: React.FC = () => {
   const [nomadIntensity, setNomadIntensity] = useState(0.3);
   const [nomadSize, setNomadSize] = useState(1.5);
   const [showControls, setShowControls] = useState(true);
+  const [showTheory, setShowTheory] = useState(false);
   
   const atoms = useRef<(Atom & { sizeMult: number; speedMult: number })[]>([]);
   const animationFrameId = useRef<number>(0);
@@ -139,6 +146,8 @@ export const MetallurgicModel: React.FC = () => {
         let forceX = 0;
         let forceY = 0;
 
+        const motionScale = isReducedMotion ? 0.2 : 1.0;
+
         // 1. Non-State (Inhibitors / Anti-freeze)
         let isInhibited = false;
         inhibitors.forEach(inh => {
@@ -148,8 +157,8 @@ export const MetallurgicModel: React.FC = () => {
           if (dist < inh.r) {
             isInhibited = true;
             // Prevent crystallization: add high kinetic energy
-            forceX += (Math.random() - 0.5) * 2 * currentIntensity;
-            forceY += (Math.random() - 0.5) * 2 * currentIntensity;
+            forceX += (Math.random() - 0.5) * 2 * currentIntensity * motionScale;
+            forceY += (Math.random() - 0.5) * 2 * currentIntensity * motionScale;
           }
         });
 
@@ -172,8 +181,8 @@ export const MetallurgicModel: React.FC = () => {
           const noiseX = Math.sin(a.y * 0.05 + time) * 2;
           const noiseY = Math.cos(a.x * 0.05 + time) * 2;
 
-          forceX += (dx_grid + noiseX) * currentLStability * currentIntensity;
-          forceY += (dy_grid + noiseY) * currentLStability * currentIntensity;
+          forceX += (dx_grid + noiseX) * currentLStability * currentIntensity * motionScale;
+          forceY += (dy_grid + noiseY) * currentLStability * currentIntensity * motionScale;
           
           a.vx *= 0.85;
           a.vy *= 0.85;
@@ -186,12 +195,12 @@ export const MetallurgicModel: React.FC = () => {
         if (currentMode === 'nomad' || (currentMode === 'conflict' && i % 2 !== 0)) {
           // Flow along a vector field
           const angle = Math.sin(a.x * 0.005 + time) * Math.cos(a.y * 0.005) * Math.PI * 2;
-          forceX += Math.cos(angle) * currentNomadIntensity * currentIntensity * 0.8 * a.speedMult;
-          forceY += Math.sin(angle) * currentNomadIntensity * currentIntensity * 0.8 * a.speedMult;
+          forceX += Math.cos(angle) * currentNomadIntensity * currentIntensity * 0.8 * a.speedMult * motionScale;
+          forceY += Math.sin(angle) * currentNomadIntensity * currentIntensity * 0.8 * a.speedMult * motionScale;
           
           // Deterritorializing jitter
-          forceX += (Math.random() - 0.5) * currentNomadIntensity * 1 * a.speedMult;
-          forceY += (Math.random() - 0.5) * currentNomadIntensity * 1 * a.speedMult;
+          forceX += (Math.random() - 0.5) * currentNomadIntensity * 1 * a.speedMult * motionScale;
+          forceY += (Math.random() - 0.5) * currentNomadIntensity * 1 * a.speedMult * motionScale;
           a.vx *= 0.99;
         }
 
@@ -255,19 +264,45 @@ export const MetallurgicModel: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => setShowControls(!showControls)}
-            className={`px-3 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all brutal-shadow-sm ${showControls ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            onClick={() => {
+              const newPlaying = !isPlaying;
+              setIsPlaying(newPlaying);
+              onAnnounce?.(`Simulation ${newPlaying ? 'resumed' : 'paused'}`);
+            }}
+            className={`p-2 border-2 border-xerox-ink transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center ${isPlaying ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            aria-label={isPlaying ? "Pause Simulation" : "Play Simulation"}
           >
-            {showControls ? 'Hide Controls' : 'Show Controls'}
+            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+          </button>
+          <button 
+            onClick={() => {
+              setShowTheory(true);
+              onAnnounce?.("Opened technical manual");
+            }}
+            className={`p-2 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center bg-xerox-bg text-xerox-ink`}
+            aria-label="View Technical Equations"
+          >
+            <Info className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => {
+              setShowControls(!showControls);
+              onAnnounce?.(`${!showControls ? 'Opened' : 'Closed'} simulation controls`);
+            }}
+            className={`px-3 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-sm' : 'text-[10px]'} font-black uppercase transition-all brutal-shadow-sm min-h-[44px] ${showControls ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            aria-label={showControls ? "Hide Controls" : "Show Controls"}
+            aria-expanded={showControls}
+          >
+            {showControls ? 'Hide' : 'Controls'}
           </button>
         </div>
       </div>
 
       <div className="relative flex-1 bg-black flex overflow-hidden min-h-0">
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden" role="img" aria-label={`Metallurgic Metaphysics Simulation: An atomic visualization showing ${mode} crystallization and nomad fluidity.`}>
           <canvas 
             ref={canvasRef} 
-            className="w-full h-full xerox-effect"
+            className={`w-full h-full ${isHighVis ? '' : 'xerox-effect'}`}
           />
         </div>
         
@@ -282,30 +317,34 @@ export const MetallurgicModel: React.FC = () => {
                 </button>
               </div>
               <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <span className="text-[9px] font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5">Operational Mode</span>
+                <div className="space-y-1.5" role="group" aria-labelledby="mode-label">
+                  <span id="mode-label" className={`${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5`}>Operational Mode</span>
                   <div className="grid grid-cols-2 gap-1">
                     <button 
                       onClick={() => setMode('state')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'state' ? 'bg-xerox-cyan text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-cyan'}`}
+                      aria-pressed={mode === 'state'}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all min-h-[44px] ${mode === 'state' ? 'bg-xerox-cyan text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-cyan'}`}
                     >
                       STATE
                     </button>
                     <button 
                       onClick={() => setMode('nomad')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'nomad' ? 'bg-xerox-magenta text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-magenta hover:text-xerox-bg'}`}
+                      aria-pressed={mode === 'nomad'}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all min-h-[44px] ${mode === 'nomad' ? 'bg-xerox-magenta text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-magenta hover:text-xerox-bg'}`}
                     >
                       NOMAD
                     </button>
                     <button 
                       onClick={() => setMode('nonstate')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'nonstate' ? 'bg-xerox-yellow text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-yellow'}`}
+                      aria-pressed={mode === 'nonstate'}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all min-h-[44px] ${mode === 'nonstate' ? 'bg-xerox-yellow text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-yellow'}`}
                     >
                       NON-STATE
                     </button>
                     <button 
                       onClick={() => setMode('conflict')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'conflict' ? 'bg-xerox-accent text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-accent hover:text-xerox-bg'}`}
+                      aria-pressed={mode === 'conflict'}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all min-h-[44px] ${mode === 'conflict' ? 'bg-xerox-accent text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-accent hover:text-xerox-bg'}`}
                     >
                       CONFLICT
                     </button>
@@ -313,25 +352,26 @@ export const MetallurgicModel: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <span className="text-[9px] font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5">Parameters</span>
+                  <span className={`${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5`}>Parameters</span>
                   
-                  <div className="space-y-0.5">
+                  <div className="space-y-0.5" role="group" aria-labelledby="density-label">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-magenta">Atomic Density</span>
-                      <span className="text-[8px] font-black">{particleCount}</span>
+                      <span id="density-label" className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Atomic Density</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{particleCount}</span>
                     </div>
                     <input 
                       type="range" min="200" max="2000" step="100" 
                       value={particleCount} 
                       onChange={(e) => setParticleCount(parseInt(e.target.value))}
-                      className="w-full h-1 bg-xerox-ink appearance-none cursor-pointer accent-xerox-magenta border border-xerox-ink"
+                      className="w-full h-2 bg-xerox-ink appearance-none cursor-pointer accent-xerox-magenta border border-xerox-ink"
+                      aria-label="Atomic Density"
                     />
                   </div>
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-magenta">Nomad Intensity</span>
-                      <span className="text-[8px] font-black">{(nomadIntensity * 100).toFixed(0)}%</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Nomad Intensity</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{(nomadIntensity * 100).toFixed(0)}%</span>
                     </div>
                     <input 
                       type="range" min="0.1" max="2" step="0.1" 
@@ -343,8 +383,8 @@ export const MetallurgicModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-magenta">Nomad Size</span>
-                      <span className="text-[8px] font-black">{nomadSize}px</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Nomad Size</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{nomadSize}px</span>
                     </div>
                     <input 
                       type="range" min="0" max="15" step="0.1" 
@@ -356,8 +396,8 @@ export const MetallurgicModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-cyan">Lattice Stability</span>
-                      <span className="text-[8px] font-black">{(latticeStability * 1000).toFixed(0)}</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-cyan`}>Lattice Stability</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{(latticeStability * 1000).toFixed(0)}</span>
                     </div>
                     <input 
                       type="range" min="0.01" max="1" step="0.01" 
@@ -369,8 +409,8 @@ export const MetallurgicModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-yellow">Inhibitor Count</span>
-                      <span className="text-[8px] font-black">{inhibitorCount}</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-yellow`}>Inhibitor Count</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{inhibitorCount}</span>
                     </div>
                     <input 
                       type="range" min="1" max="30" step="1" 
@@ -382,8 +422,8 @@ export const MetallurgicModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-yellow">Inhibitor Size</span>
-                      <span className="text-[8px] font-black">{inhibitorSize}px</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-yellow`}>Inhibitor Size</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{inhibitorSize}px</span>
                     </div>
                     <input 
                       type="range" min="0" max="400" step="5" 
@@ -395,8 +435,8 @@ export const MetallurgicModel: React.FC = () => {
 
                   <div className="pt-1 border-t border-xerox-ink/20">
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[8px] font-black uppercase tracking-widest">Thermal Power</span>
-                      <span className="text-[8px] font-black">{(intensity * 100).toFixed(0)}%</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest`}>Thermal Power</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{(intensity * 100).toFixed(0)}%</span>
                     </div>
                     <input 
                       type="range" min="0.1" max="1" step="0.05" 
@@ -409,10 +449,14 @@ export const MetallurgicModel: React.FC = () => {
 
                 <div className="pt-1">
                   <button 
-                    onClick={() => initAtoms(canvasRef.current?.width || 0, canvasRef.current?.height || 0, particleCount)}
-                    className="w-full py-1 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm flex items-center justify-center gap-2 text-[8px] font-black uppercase"
+                    onClick={() => {
+                      initAtoms(canvasRef.current?.width || 0, canvasRef.current?.height || 0, particleCount);
+                      onAnnounce?.("Simulation reset");
+                    }}
+                    className={`w-full py-2 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm flex items-center justify-center gap-2 ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase min-h-[44px]`}
+                    aria-label="Reset Simulation"
                   >
-                    <RotateCcw className="w-3 h-3" />
+                    <RotateCcw className="w-4 h-4" />
                     Reset Simulation
                   </button>
                 </div>
@@ -455,6 +499,13 @@ export const MetallurgicModel: React.FC = () => {
           <span>Atoms: {particleCount}</span>
         </div>
       </div>
+
+      <TheoryPanel 
+        modelType="metallurgic" 
+        isOpen={showTheory} 
+        onClose={() => setShowTheory(false)}
+        isHighVis={isHighVis}
+      />
     </div>
   );
 };

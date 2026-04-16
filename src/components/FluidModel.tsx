@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Droplets, Waves, Shield, Play, Pause, RotateCcw, X } from 'lucide-react';
+import { Droplets, Waves, Shield, Play, Pause, RotateCcw, X, Info } from 'lucide-react';
+import TheoryPanel from './TheoryPanel';
 
 interface Particle {
   x: number;
@@ -21,10 +22,15 @@ interface Vortex {
   life: number;
 }
 
-export const FluidModel: React.FC = () => {
+export const FluidModel: React.FC<{ isReducedMotion?: boolean; isHighVis?: boolean; onAnnounce?: (msg: string) => void }> = ({ isReducedMotion, isHighVis, onAnnounce }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [mode, setMode] = useState<'state' | 'nomad' | 'nonstate' | 'conflict'>('state');
+
+  // Trigger announcement on mode change
+  useEffect(() => {
+    onAnnounce?.(`Hydraulic Model switched to ${mode} mode`);
+  }, [mode, onAnnounce]);
   const [intensity, setIntensity] = useState(0.5);
   const [particleCount, setParticleCount] = useState(1200);
   const [vortexStrength, setVortexStrength] = useState(1);
@@ -33,6 +39,7 @@ export const FluidModel: React.FC = () => {
   const [nomadIntensity, setNomadIntensity] = useState(0.5);
   const [nomadSize, setNomadSize] = useState(1.5);
   const [showControls, setShowControls] = useState(true);
+  const [showTheory, setShowTheory] = useState(false);
   
   const particles = useRef<Particle[]>([]);
   const vortices = useRef<Vortex[]>([]);
@@ -150,7 +157,7 @@ export const FluidModel: React.FC = () => {
           ctx.stroke();
 
           // Vortex Shedding from Obstacles
-          if ((currentMode === 'nomad' || currentMode === 'conflict') && Math.random() < 0.05 * currentIntensity) {
+          if (currentMode === 'conflict' && Math.random() < 0.05 * currentIntensity) {
             vortices.current.push({
               x: ox + effectiveObstacleSize,
               y: oy + (Math.random() - 0.5) * effectiveObstacleSize,
@@ -205,6 +212,8 @@ export const FluidModel: React.FC = () => {
         let forceY = 0;
         let inVortex = false;
 
+        const motionScale = isReducedMotion ? 0.2 : 1.0;
+
         // 1. Non-State (Warding off Laminar Flow)
         let isWarded = false;
         obstacles.forEach(o => {
@@ -213,8 +222,8 @@ export const FluidModel: React.FC = () => {
           const distSq = dx * dx + dy * dy;
           if (distSq < o.r * o.r) {
             isWarded = true;
-            forceX += (Math.random() - 0.5) * 4 * currentIntensity;
-            forceY += (Math.random() - 0.5) * 4 * currentIntensity;
+            forceX += (Math.random() - 0.5) * 4 * currentIntensity * motionScale;
+            forceY += (Math.random() - 0.5) * 4 * currentIntensity * motionScale;
             p.vx *= 0.8;
             p.vy *= 0.8;
           }
@@ -232,8 +241,8 @@ export const FluidModel: React.FC = () => {
             const dist = Math.sqrt(distSq);
             const angle = Math.atan2(dy, dx) + Math.PI / 2;
             const strength = (v.strength * 250 * currentNomadIntensity * p.speedMult * v.life) / (dist + 15);
-            forceX += Math.cos(angle) * strength * 0.3 * currentIntensity;
-            forceY += Math.sin(angle) * strength * 0.3 * currentIntensity;
+            forceX += Math.cos(angle) * strength * 0.3 * currentIntensity * motionScale;
+            forceY += Math.sin(angle) * strength * 0.3 * currentIntensity * motionScale;
           }
         });
 
@@ -244,16 +253,16 @@ export const FluidModel: React.FC = () => {
           // Velocity gradient: slower near boundaries (friction)
           const distToEdge = Math.min(p.y, height - p.y);
           const friction = Math.max(0.2, Math.min(1, distToEdge / 100));
-          forceX += 0.2 * currentIntensity * friction;
-          forceY += Math.sin(p.x * 0.01 + time) * 0.05 * currentIntensity;
+          forceX += 0.2 * currentIntensity * friction * motionScale;
+          forceY += Math.sin(p.x * 0.01 + time) * 0.05 * currentIntensity * motionScale;
           p.vy *= 0.95;
         }
 
         // 4. Nomad Jitter (Smooth Space)
         const isNomadParticle = currentMode === 'nomad' || (currentMode === 'conflict' && i % 2 !== 0);
         if (isNomadParticle || inVortex) {
-          forceX += (Math.random() - 0.5) * 0.5 * currentNomadIntensity * p.speedMult;
-          forceY += (Math.random() - 0.5) * 0.5 * currentNomadIntensity * p.speedMult;
+          forceX += (Math.random() - 0.5) * 0.5 * currentNomadIntensity * p.speedMult * motionScale;
+          forceY += (Math.random() - 0.5) * 0.5 * currentNomadIntensity * p.speedMult * motionScale;
         }
 
         p.vx += forceX;
@@ -314,19 +323,45 @@ export const FluidModel: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => setShowControls(!showControls)}
-            className={`px-3 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all brutal-shadow-sm ${showControls ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            onClick={() => {
+              const newPlaying = !isPlaying;
+              setIsPlaying(newPlaying);
+              onAnnounce?.(`Simulation ${newPlaying ? 'resumed' : 'paused'}`);
+            }}
+            className={`p-2 border-2 border-xerox-ink transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center ${isPlaying ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            aria-label={isPlaying ? "Pause Simulation" : "Play Simulation"}
           >
-            {showControls ? 'Hide Controls' : 'Show Controls'}
+            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+          </button>
+          <button 
+            onClick={() => {
+              setShowTheory(true);
+              onAnnounce?.("Opened technical manual");
+            }}
+            className={`p-2 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center bg-xerox-bg text-xerox-ink`}
+            aria-label="View Technical Equations"
+          >
+            <Info className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => {
+              setShowControls(!showControls);
+              onAnnounce?.(`${!showControls ? 'Opened' : 'Closed'} simulation controls`);
+            }}
+            className={`px-3 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-sm' : 'text-[10px]'} font-black uppercase transition-all brutal-shadow-sm min-h-[44px] ${showControls ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            aria-label={showControls ? "Hide Controls" : "Show Controls"}
+            aria-expanded={showControls}
+          >
+            {showControls ? 'Hide' : 'Controls'}
           </button>
         </div>
       </div>
 
       <div className="relative flex-1 bg-black flex overflow-hidden min-h-0">
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden" role="img" aria-label={`Hydraulic Metaphysics Simulation: A fluid dynamic visualization showing ${mode} interactions.`}>
           <canvas 
             ref={canvasRef} 
-            className="w-full h-full xerox-effect"
+            className={`w-full h-full ${isHighVis ? '' : 'xerox-effect'}`}
           />
         </div>
         
@@ -341,30 +376,34 @@ export const FluidModel: React.FC = () => {
                 </button>
               </div>
               <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <span className="text-[9px] font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5">Operational Mode</span>
+                <div className="space-y-1.5" role="group" aria-labelledby="mode-label">
+                  <span id="mode-label" className={`${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5`}>Operational Mode</span>
                   <div className="grid grid-cols-2 gap-1">
                     <button 
                       onClick={() => setMode('state')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'state' ? 'bg-xerox-cyan text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-cyan'}`}
+                      aria-pressed={mode === 'state'}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all min-h-[44px] ${mode === 'state' ? 'bg-xerox-cyan text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-cyan'}`}
                     >
                       STATE
                     </button>
                     <button 
                       onClick={() => setMode('nomad')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'nomad' ? 'bg-xerox-magenta text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-magenta hover:text-xerox-bg'}`}
+                      aria-pressed={mode === 'nomad'}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all min-h-[44px] ${mode === 'nomad' ? 'bg-xerox-magenta text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-magenta hover:text-xerox-bg'}`}
                     >
                       NOMAD
                     </button>
                     <button 
                       onClick={() => setMode('nonstate')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'nonstate' ? 'bg-xerox-yellow text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-yellow'}`}
+                      aria-pressed={mode === 'nonstate'}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all min-h-[44px] ${mode === 'nonstate' ? 'bg-xerox-yellow text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-yellow'}`}
                     >
                       NON-STATE
                     </button>
                     <button 
                       onClick={() => setMode('conflict')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'conflict' ? 'bg-xerox-accent text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-accent hover:text-xerox-bg'}`}
+                      aria-pressed={mode === 'conflict'}
+                      className={`px-2 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all min-h-[44px] ${mode === 'conflict' ? 'bg-xerox-accent text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-accent hover:text-xerox-bg'}`}
                     >
                       CONFLICT
                     </button>
@@ -372,25 +411,26 @@ export const FluidModel: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <span className="text-[9px] font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5">Parameters</span>
+                  <span className={`${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5`}>Parameters</span>
                   
-                  <div className="space-y-0.5">
+                  <div className="space-y-0.5" role="group" aria-labelledby="density-label">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-magenta">Flow Density</span>
-                      <span className="text-[8px] font-black">{particleCount}</span>
+                      <span id="density-label" className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Flow Density</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{particleCount}</span>
                     </div>
                     <input 
                       type="range" min="200" max="2000" step="100" 
                       value={particleCount} 
                       onChange={(e) => setParticleCount(parseInt(e.target.value))}
-                      className="w-full h-1 bg-xerox-ink appearance-none cursor-pointer accent-xerox-magenta border border-xerox-ink"
+                      className="w-full h-2 bg-xerox-ink appearance-none cursor-pointer accent-xerox-magenta border border-xerox-ink"
+                      aria-label="Flow Density"
                     />
                   </div>
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-magenta">Nomad Intensity</span>
-                      <span className="text-[8px] font-black">{(nomadIntensity * 100).toFixed(0)}%</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Nomad Intensity</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{(nomadIntensity * 100).toFixed(0)}%</span>
                     </div>
                     <input 
                       type="range" min="0.1" max="5" step="0.1" 
@@ -402,8 +442,8 @@ export const FluidModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-magenta">Nomad Size</span>
-                      <span className="text-[8px] font-black">{nomadSize}px</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Nomad Size</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{nomadSize}px</span>
                     </div>
                     <input 
                       type="range" min="0" max="15" step="0.1" 
@@ -415,8 +455,8 @@ export const FluidModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-cyan">Vortex Strength</span>
-                      <span className="text-[8px] font-black">{(vortexStrength * 100).toFixed(0)}%</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-cyan`}>Vortex Strength</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{(vortexStrength * 100).toFixed(0)}%</span>
                     </div>
                     <input 
                       type="range" min="0.1" max="10" step="0.1" 
@@ -428,8 +468,8 @@ export const FluidModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-yellow">Obstacle Count</span>
-                      <span className="text-[8px] font-black">{obstacleCount}</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-yellow`}>Obstacle Count</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{obstacleCount}</span>
                     </div>
                     <input 
                       type="range" min="1" max="40" step="1" 
@@ -441,8 +481,8 @@ export const FluidModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-yellow">Obstacle Size</span>
-                      <span className="text-[8px] font-black">{obstacleSize}px</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-yellow`}>Obstacle Size</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{obstacleSize}px</span>
                     </div>
                     <input 
                       type="range" min="0" max="300" step="5" 
@@ -454,8 +494,8 @@ export const FluidModel: React.FC = () => {
 
                   <div className="pt-1 border-t border-xerox-ink/20">
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[8px] font-black uppercase tracking-widest">Global Intensity</span>
-                      <span className="text-[8px] font-black">{(intensity * 100).toFixed(0)}%</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest`}>Global Intensity</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{(intensity * 100).toFixed(0)}%</span>
                     </div>
                     <input 
                       type="range" min="0.1" max="1" step="0.05" 
@@ -469,7 +509,7 @@ export const FluidModel: React.FC = () => {
                 <div className="pt-1">
                   <button 
                     onClick={() => initParticles(canvasRef.current?.width || 0, canvasRef.current?.height || 0, particleCount)}
-                    className="w-full py-1 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm flex items-center justify-center gap-2 text-[8px] font-black uppercase"
+                    className={`w-full py-1 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm flex items-center justify-center gap-2 ${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase`}
                   >
                     <RotateCcw className="w-3 h-3" />
                     Reset Simulation
@@ -514,6 +554,13 @@ export const FluidModel: React.FC = () => {
           <span>Particles: {particleCount}</span>
         </div>
       </div>
+
+      <TheoryPanel 
+        modelType="fluid" 
+        isOpen={showTheory} 
+        onClose={() => setShowTheory(false)}
+        isHighVis={isHighVis}
+      />
     </div>
   );
 };

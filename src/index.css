@@ -62,4 +62,40 @@
     background-image: radial-gradient(#050505 1px, transparent 0);
     background-size: 4px 4px;
   }
+  
+  .accessibility-high-vis {
+    --color-xerox-bg: #ffffff;
+    --color-xerox-ink: #000000;
+  }
+
+  :focus-visible {
+    outline: 4px solid #00aeef !important;
+    outline-offset: 2px !important;
+  }
+
+  /* Improve touch targets and contrast */
+  .accessibility-high-vis button, 
+  .accessibility-high-vis summary {
+    @apply normal-case font-bold;
+  }
+
+  /* Markdown styles for Theory Panel */
+  .markdown-body h3 {
+    @apply text-base font-black uppercase mb-2 mt-6 border-b-2 border-xerox-ink;
+  }
+  .markdown-body p {
+    @apply mb-4 leading-relaxed;
+  }
+  .markdown-body ul {
+    @apply list-disc ml-6 mb-4;
+  }
+  .markdown-body li {
+    @apply mb-2;
+  }
+  .markdown-body strong {
+    @apply font-black;
+  }
+  .markdown-body code {
+    @apply bg-xerox-ink/10 px-1 font-mono rounded-sm;
+  }
 }

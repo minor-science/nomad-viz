@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Waves, Zap, Wind, ShieldAlert, Play, Pause, RotateCcw, X } from 'lucide-react';
+import { Waves, Zap, Wind, ShieldAlert, Play, Pause, RotateCcw, X, Info } from 'lucide-react';
+import TheoryPanel from './TheoryPanel';
 
 interface Particle {
   x: number;
@@ -11,10 +12,15 @@ interface Particle {
   speedMult: number;
 }
 
-export const AcousticModel: React.FC = () => {
+export const AcousticModel: React.FC<{ isReducedMotion?: boolean; isHighVis?: boolean; onAnnounce?: (msg: string) => void }> = ({ isReducedMotion, isHighVis, onAnnounce }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [mode, setMode] = useState<'state' | 'nomad' | 'nonstate' | 'conflict'>('state');
+
+  // Trigger announcement on mode change
+  useEffect(() => {
+    onAnnounce?.(`Acoustic Model switched to ${mode} mode`);
+  }, [mode, onAnnounce]);
   const [intensity, setIntensity] = useState(0.4);
   const [particleCount, setParticleCount] = useState(1800);
   const [harmonicN, setHarmonicN] = useState(4);
@@ -24,6 +30,7 @@ export const AcousticModel: React.FC = () => {
   const [nomadIntensity, setNomadIntensity] = useState(0.3);
   const [nomadSize, setNomadSize] = useState(1);
   const [showControls, setShowControls] = useState(true);
+  const [showTheory, setShowTheory] = useState(false);
   
   const particles = useRef<Particle[]>([]);
   const animationFrameId = useRef<number>(0);
@@ -143,6 +150,8 @@ export const AcousticModel: React.FC = () => {
         let forceX = 0;
         let forceY = 0;
 
+        const motionScale = isReducedMotion ? 0.2 : 1.0;
+
         // 1. Non-State (Destructive Interference / Silence)
         let isInterfered = false;
         interferenceZones.forEach(z => {
@@ -154,7 +163,7 @@ export const AcousticModel: React.FC = () => {
           // Warding off resonance: particles are pushed into a state of "silence"
           // In this model, silence is the Great Refusal of the State's frequency.
           // Particles in silence zones ignore the Chladni gradient and move in chaotic, non-metric ways.
-          const noiseScale = 2 * currentIntensity;
+          const noiseScale = 2 * currentIntensity * motionScale;
           forceX += (Math.random() - 0.5) * noiseScale;
           forceY += (Math.random() - 0.5) * noiseScale;
           
@@ -163,7 +172,7 @@ export const AcousticModel: React.FC = () => {
           p.vy *= 0.9;
         } else if (currentMode === 'state' || (currentMode === 'conflict' && i % 2 === 0)) {
           // 2. State (Standing Waves / Nodes)
-          const force = currentIntensity;
+          const force = currentIntensity * motionScale;
           forceX -= dx * Math.abs(val) * force * 10;
           forceY -= dy * Math.abs(val) * force * 10;
           p.vx *= 0.95;
@@ -171,10 +180,10 @@ export const AcousticModel: React.FC = () => {
         } else if (currentMode === 'nomad' || (currentMode === 'conflict' && i % 2 !== 0)) {
           // 3. Nomad (Transversal / Off-resonant)
           const angle = Math.atan2(dy, dx) + Math.PI / 2;
-          forceX += Math.cos(angle) * currentNomadIntensity * currentIntensity * 1.2 * p.speedMult;
-          forceY += Math.sin(angle) * currentNomadIntensity * currentIntensity * 1.2 * p.speedMult;
-          forceX += (Math.random() - 0.5) * currentNomadIntensity * 0.8 * p.speedMult;
-          forceY += (Math.random() - 0.5) * currentNomadIntensity * 0.8 * p.speedMult;
+          forceX += Math.cos(angle) * currentNomadIntensity * currentIntensity * 1.2 * p.speedMult * motionScale;
+          forceY += Math.sin(angle) * currentNomadIntensity * currentIntensity * 1.2 * p.speedMult * motionScale;
+          forceX += (Math.random() - 0.5) * currentNomadIntensity * 0.8 * p.speedMult * motionScale;
+          forceY += (Math.random() - 0.5) * currentNomadIntensity * 0.8 * p.speedMult * motionScale;
           p.vx *= 0.98;
           p.vy *= 0.98;
         }
@@ -257,19 +266,45 @@ export const AcousticModel: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => setShowControls(!showControls)}
-            className={`px-3 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all brutal-shadow-sm ${showControls ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            onClick={() => {
+              const newPlaying = !isPlaying;
+              setIsPlaying(newPlaying);
+              onAnnounce?.(`Simulation ${newPlaying ? 'resumed' : 'paused'}`);
+            }}
+            className={`p-2 border-2 border-xerox-ink transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center ${isPlaying ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            aria-label={isPlaying ? "Pause Simulation" : "Play Simulation"}
           >
-            {showControls ? 'Hide Controls' : 'Show Controls'}
+            {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+          </button>
+          <button 
+            onClick={() => {
+              setShowTheory(true);
+              onAnnounce?.("Opened technical manual");
+            }}
+            className={`p-2 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center bg-xerox-bg text-xerox-ink`}
+            aria-label="View Technical Equations"
+          >
+            <Info className="w-5 h-5" />
+          </button>
+          <button 
+            onClick={() => {
+              setShowControls(!showControls);
+              onAnnounce?.(`${!showControls ? 'Opened' : 'Closed'} simulation controls`);
+            }}
+            className={`px-3 py-2 border-2 border-xerox-ink ${isHighVis ? 'text-sm' : 'text-[10px]'} font-black uppercase transition-all brutal-shadow-sm min-h-[44px] ${showControls ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            aria-label={showControls ? "Hide Controls" : "Show Controls"}
+            aria-expanded={showControls}
+          >
+            {showControls ? 'Hide' : 'Controls'}
           </button>
         </div>
       </div>
 
       <div className="relative flex-1 bg-black flex overflow-hidden min-h-0">
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden" role="img" aria-label={`Acoustic Metaphysics Simulation: A resonant visualization showing ${mode} sound waves.`}>
           <canvas 
             ref={canvasRef} 
-            className="w-full h-full xerox-effect"
+            className={`w-full h-full ${isHighVis ? '' : 'xerox-effect'}`}
           />
         </div>
         
@@ -285,29 +320,29 @@ export const AcousticModel: React.FC = () => {
               </div>
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <span className="text-[9px] font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5">Operational Mode</span>
+                  <span className={`${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5`}>Operational Mode</span>
                   <div className="grid grid-cols-2 gap-1">
                     <button 
                       onClick={() => setMode('state')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'state' ? 'bg-xerox-cyan text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-cyan'}`}
+                      className={`px-1 py-1 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all ${mode === 'state' ? 'bg-xerox-cyan text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-cyan'}`}
                     >
                       STATE
                     </button>
                     <button 
                       onClick={() => setMode('nomad')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'nomad' ? 'bg-xerox-magenta text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-magenta hover:text-xerox-bg'}`}
+                      className={`px-1 py-1 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all ${mode === 'nomad' ? 'bg-xerox-magenta text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-magenta hover:text-xerox-bg'}`}
                     >
                       NOMAD
                     </button>
                     <button 
                       onClick={() => setMode('nonstate')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'nonstate' ? 'bg-xerox-yellow text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-yellow'}`}
+                      className={`px-1 py-1 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all ${mode === 'nonstate' ? 'bg-xerox-yellow text-xerox-ink brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-yellow'}`}
                     >
                       NON-STATE
                     </button>
                     <button 
                       onClick={() => setMode('conflict')}
-                      className={`px-1 py-1 border-2 border-xerox-ink text-[9px] font-black uppercase transition-all ${mode === 'conflict' ? 'bg-xerox-accent text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-accent hover:text-xerox-bg'}`}
+                      className={`px-1 py-1 border-2 border-xerox-ink ${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase transition-all ${mode === 'conflict' ? 'bg-xerox-accent text-xerox-bg brutal-shadow-sm' : 'bg-white text-xerox-ink hover:bg-xerox-accent hover:text-xerox-bg'}`}
                     >
                       CONFLICT
                     </button>
@@ -315,12 +350,12 @@ export const AcousticModel: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <span className="text-[9px] font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5">Parameters</span>
+                  <span className={`${isHighVis ? 'text-xs' : 'text-[9px]'} font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5`}>Parameters</span>
                   
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-magenta">Dust Density</span>
-                      <span className="text-[8px] font-black">{particleCount}</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Dust Density</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{particleCount}</span>
                     </div>
                     <input 
                       type="range" min="500" max="3000" step="100" 
@@ -332,8 +367,8 @@ export const AcousticModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-magenta">Nomad Intensity</span>
-                      <span className="text-[8px] font-black">{(nomadIntensity * 100).toFixed(0)}%</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Nomad Intensity</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{(nomadIntensity * 100).toFixed(0)}%</span>
                     </div>
                     <input 
                       type="range" min="0.1" max="2" step="0.1" 
@@ -345,8 +380,8 @@ export const AcousticModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-magenta">Nomad Size</span>
-                      <span className="text-[8px] font-black">{nomadSize}px</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-magenta`}>Nomad Size</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{nomadSize}px</span>
                     </div>
                     <input 
                       type="range" min="0" max="10" step="0.1" 
@@ -358,8 +393,8 @@ export const AcousticModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-cyan">Harmonic Mode</span>
-                      <span className="text-[8px] font-black">{harmonicN} : {harmonicM}</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-cyan`}>Harmonic Mode</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{harmonicN} : {harmonicM}</span>
                     </div>
                     <div className="flex gap-2">
                       <input 
@@ -379,8 +414,8 @@ export const AcousticModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-yellow">Silence Zones</span>
-                      <span className="text-[8px] font-black">{interferenceCount}</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-yellow`}>Silence Zones</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{interferenceCount}</span>
                     </div>
                     <input 
                       type="range" min="1" max="15" step="1" 
@@ -392,8 +427,8 @@ export const AcousticModel: React.FC = () => {
 
                   <div className="space-y-0.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-xerox-yellow">Silence Size</span>
-                      <span className="text-[8px] font-black">{interferenceSize}px</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest text-xerox-yellow`}>Silence Size</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{interferenceSize}px</span>
                     </div>
                     <input 
                       type="range" min="0" max="600" step="10" 
@@ -405,8 +440,8 @@ export const AcousticModel: React.FC = () => {
 
                   <div className="pt-1 border-t border-xerox-ink/20">
                     <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[8px] font-black uppercase tracking-widest">Resonance</span>
-                      <span className="text-[8px] font-black">{(intensity * 100).toFixed(0)}%</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase tracking-widest`}>Resonance</span>
+                      <span className={`${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black`}>{(intensity * 100).toFixed(0)}%</span>
                     </div>
                     <input 
                       type="range" min="0.1" max="1" step="0.05" 
@@ -420,7 +455,7 @@ export const AcousticModel: React.FC = () => {
                 <div className="pt-1">
                   <button 
                     onClick={() => initParticles(canvasRef.current?.width || 0, canvasRef.current?.height || 0, particleCount)}
-                    className="w-full py-1 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm flex items-center justify-center gap-2 text-[8px] font-black uppercase"
+                    className={`w-full py-1 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm flex items-center justify-center gap-2 ${isHighVis ? 'text-[10px]' : 'text-[8px]'} font-black uppercase`}
                   >
                     <RotateCcw className="w-3 h-3" />
                     Reset Simulation
@@ -465,6 +500,13 @@ export const AcousticModel: React.FC = () => {
           <span>Dust: {particleCount}</span>
         </div>
       </div>
+
+      <TheoryPanel 
+        modelType="acoustic" 
+        isOpen={showTheory} 
+        onClose={() => setShowTheory(false)}
+        isHighVis={isHighVis}
+      />
     </div>
   );
 };
