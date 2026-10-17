@@ -26,6 +26,15 @@ export function reserve(x: number, y: number, w: number, h: number) {
 const overlaps = (a: { x: number; y: number; w: number; h: number }) =>
   placed.some((b) => a.x < b.x + b.w + 6 && b.x < a.x + a.w + 6 && a.y < b.y + b.h + 6 && b.y < a.y + a.h + 6);
 
+/** Where a following tag's box sits: its side, above or below, its row, and its glided position. */
+export interface Glide {
+  lx?: number;
+  ly?: number;
+  side?: number;
+  vert?: number;
+  row?: number;
+}
+
 export function drawTag(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -33,7 +42,7 @@ export function drawTag(
   text: string,
   color: string,
   bounds: { width: number; height: number },
-  glide?: { lx?: number; ly?: number },
+  glide?: Glide,
 ) {
   // Two tags of the same kind never show at once; different kinds may, even for one process.
   if (shown.has(text)) return;
@@ -44,26 +53,38 @@ export function drawTag(
   ctx.font = 'bold 20px "JetBrains Mono", monospace';
   const w = ctx.measureText(text).width + 16;
   const h = 30;
-  // Place the label up and to the right of the feature, flipped to stay on screen.
-  let lx = x + 28;
-  let ly = y - 46;
-  if (lx + w > bounds.width - 8) lx = x - 28 - w;
-  lx = Math.max(8, Math.min(lx, bounds.width - 8 - w));
-  if (ly < 8) ly = y + 22;
-  for (let k = 0; k < 8 && overlaps({ x: lx, y: ly, w, h }); k++) {
-    ly += h + 8;
-    if (ly + h > bounds.height - 8) ly = 8 + k * (h + 8);
+  // Candidate spots: right or left of the feature (side 0, 1), above or below it (vert 0, 1),
+  // pushed down by whole rows to clear other tags. The first spot that fits wins, but a tag that
+  // already has a spot keeps it while it still fits, so it does not flip back and forth.
+  const rect = (side: number, vert: number, row: number) => ({
+    x: side === 0 ? x + 28 : x - 28 - w,
+    y: (vert === 0 ? y - 46 : y + 22) + row * (h + 8),
+    w,
+    h,
+  });
+  const fits = (r: { x: number; y: number; w: number; h: number }) =>
+    r.x >= 8 && r.x + r.w <= bounds.width - 8 && r.y >= 8 && r.y + r.h <= bounds.height - 8 && !overlaps(r);
+  let spot: [number, number, number] | null = null;
+  if (glide?.side !== undefined && fits(rect(glide.side, glide.vert!, glide.row!))) spot = [glide.side, glide.vert!, glide.row!];
+  for (let row = 0; row < 8 && !spot; row++) {
+    for (let vert = 0; vert < 2 && !spot; vert++) {
+      for (let side = 0; side < 2 && !spot; side++) if (fits(rect(side, vert, row))) spot = [side, vert, row];
+    }
   }
-  placed.push({ x: lx, y: ly, w, h });
-  // A tag that follows something moving glides its box toward the new spot instead of jumping.
+  const target = rect(...(spot ?? [0, 0, 0]));
+  let lx = Math.max(8, Math.min(target.x, bounds.width - 8 - w));
+  let ly = Math.max(8, Math.min(target.y, bounds.height - 8 - h));
+  // A tag that follows something moving glides its box toward its spot instead of jumping.
   if (glide) {
+    if (spot) [glide.side, glide.vert, glide.row] = spot;
     if (glide.lx !== undefined && glide.ly !== undefined) {
-      lx = glide.lx + (lx - glide.lx) * 0.1;
-      ly = glide.ly + (ly - glide.ly) * 0.1;
+      lx = glide.lx + (lx - glide.lx) * 0.08;
+      ly = glide.ly + (ly - glide.ly) * 0.08;
     }
     glide.lx = lx;
     glide.ly = ly;
   }
+  placed.push({ x: lx, y: ly, w, h });
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -99,7 +120,10 @@ export class StickyTag<A> {
   }
   private age = 0;
   private alpha = 0;
-  private box: { lx?: number; ly?: number } = {};
+  private box: Glide = {};
+  // First stage of the anchor's smoothing; x and y follow this, so jitter is filtered twice.
+  private fx = 0;
+  private fy = 0;
   private dwell: number;
   private minDwell: number;
   /**
@@ -124,8 +148,8 @@ export class StickyTag<A> {
       const p = pick();
       if (p) {
         if (this.anchor === null || !pos) {
-          this.x = p.x;
-          this.y = p.y;
+          this.x = this.fx = p.x;
+          this.y = this.fy = p.y;
         }
         this.anchor = p.anchor;
         this.lost = false;
@@ -137,9 +161,12 @@ export class StickyTag<A> {
       }
     }
     if (pos) {
-      // Follow gently, so a feature whose position jitters still moves its tag smoothly.
-      this.x += (pos.x - this.x) * 0.07;
-      this.y += (pos.y - this.y) * 0.07;
+      // Follow through two smoothing stages, so a feature whose position jitters (a cluster's
+      // center, a band stepping from cell to cell) still moves its tag smoothly.
+      this.fx += (pos.x - this.fx) * 0.12;
+      this.fy += (pos.y - this.fy) * 0.12;
+      this.x += (this.fx - this.x) * 0.12;
+      this.y += (this.fy - this.y) * 0.12;
       this.alpha = Math.min(1, this.alpha + 0.08);
     } else {
       this.alpha = Math.max(0, this.alpha - 0.05);

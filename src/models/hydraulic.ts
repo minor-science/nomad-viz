@@ -209,7 +209,10 @@ function create(): SimInstance {
         dye.step(fluid, params.dye);
       }
       const stakes = dye.stats(regimes);
-      fronts = stakes.fronts;
+      // The front as drawn follows the measured front smoothly, since the measured one jumps
+      // whenever the leading particle of a lane strays from it.
+      if (fronts.length !== stakes.fronts.length) fronts = [...stakes.fronts];
+      for (let k = 0; k < fronts.length; k++) fronts[k] += (stakes.fronts[k] - fronts[k]) * 0.1;
       let floorMax = 0;
       let floorMean = 0;
       for (let x = 0; x < NX; x++) {
