@@ -6,41 +6,31 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Waves, 
-  Droplets, 
-  Anvil, 
-  Orbit,
-  Info,
-  X,
-  Menu,
-  Settings,
-  Eye,
-  ZapOff
-} from 'lucide-react';
+import { Info, X, Menu, Eye, ZapOff } from 'lucide-react';
 
-import AcousticModel from './components/AcousticModel';
-import FluidModel from './components/FluidModel';
-import CosmicModel from './components/CosmicModel';
-import MetallurgicModel from './components/MetallurgicModel';
+import ModelShell from './components/ModelShell';
+import { MODELS, MODEL, isModelId } from './models';
+import { readModel } from './sim/url';
+import type { ModelId } from './sim/types';
 
-type ModelType = 'hydraulic' | 'metallurgic' | 'acoustic' | 'cosmic';
-
-const models = [
-  { id: 'hydraulic', name: 'Hydraulic', icon: Droplets },
-  { id: 'metallurgic', name: 'Metallurgic', icon: Anvil },
-  { id: 'acoustic', name: 'Acoustic', icon: Waves },
-  { id: 'cosmic', name: 'Cosmic', icon: Orbit },
-];
+const ACTIVE_ICON: Record<ModelId, string> = {
+  hydraulic: 'text-xerox-cyan',
+  metallurgic: 'text-xerox-gray',
+  acoustic: 'text-xerox-yellow',
+  cosmic: 'text-xerox-magenta',
+};
 
 export default function App() {
-  const [activeModel, setActiveModel] = useState<ModelType>('hydraulic');
+  const [activeModel, setActiveModel] = useState<ModelId>(() => {
+    const m = readModel();
+    return isModelId(m) ? m : 'hydraulic';
+  });
   const [showInfo, setShowInfo] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Accessibility States
   const [highVisibility, setHighVisibility] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [announcement, setAnnouncement] = useState('');
 
   return (
@@ -111,11 +101,13 @@ export default function App() {
               Select Metaphysics
             </h2>
             <div className="grid grid-cols-1 gap-2">
-              {models.map((model) => (
+              {MODELS.map((model) => (
                 <button
                   key={model.id}
                   onClick={() => {
-                    setActiveModel(model.id as ModelType);
+                    // A new model starts from its own defaults, so drop the old model's settings from the URL.
+                    window.history.replaceState(null, '', `${window.location.pathname}?model=${model.id}`);
+                    setActiveModel(model.id);
                     setIsSidebarOpen(false);
                     setAnnouncement(`Switched to ${model.name} model`);
                   }}
@@ -128,20 +120,12 @@ export default function App() {
                 >
                   <div className="flex items-center justify-between">
                     <span className={`font-black uppercase tracking-tight ${highVisibility ? 'text-lg' : 'text-base'}`}>{model.name}</span>
-                    <model.icon aria-hidden="true" className={`w-5 h-5 ${
-                      activeModel === model.id 
-                        ? (model.id === 'cosmic' ? 'text-xerox-magenta' : 
-                           model.id === 'metallurgic' ? 'text-xerox-gray' : 
-                           model.id === 'acoustic' ? 'text-xerox-yellow' :
-                           model.id === 'hydraulic' ? 'text-xerox-cyan' : 'text-xerox-accent')
-                        : 'text-xerox-ink group-hover:text-xerox-ink'
+                    <model.sidebarIcon aria-hidden="true" className={`w-5 h-5 ${
+                      activeModel === model.id ? ACTIVE_ICON[model.id] : 'text-xerox-ink group-hover:text-xerox-ink'
                     }`} />
                   </div>
                   <p className={`mt-0.5 font-bold uppercase tracking-wider opacity-70 ${highVisibility ? 'text-[10px]' : 'text-[9px]'} ${activeModel === model.id ? 'text-xerox-bg' : 'text-xerox-ink'}`}>
-                    {model.id === 'cosmic' && 'Orbital Capture'}
-                    {model.id === 'metallurgic' && 'Thermodynamic Flow'}
-                    {model.id === 'acoustic' && 'Resonant Frequency'}
-                    {model.id === 'hydraulic' && 'Fluid Dynamics'}
+                    {model.tagline}
                   </p>
                 </button>
               ))}
@@ -233,10 +217,13 @@ export default function App() {
             transition={{ duration: reducedMotion ? 0 : 0.15 }}
             className="flex-1 w-full relative min-h-0"
           >
-            {activeModel === 'hydraulic' && <FluidModel isReducedMotion={reducedMotion} isHighVis={highVisibility} onAnnounce={setAnnouncement} />}
-            {activeModel === 'metallurgic' && <MetallurgicModel isReducedMotion={reducedMotion} isHighVis={highVisibility} onAnnounce={setAnnouncement} />}
-            {activeModel === 'acoustic' && <AcousticModel isReducedMotion={reducedMotion} isHighVis={highVisibility} onAnnounce={setAnnouncement} />}
-            {activeModel === 'cosmic' && <CosmicModel isReducedMotion={reducedMotion} isHighVis={highVisibility} onAnnounce={setAnnouncement} />}
+            <ModelShell
+              key={activeModel}
+              model={MODEL[activeModel]}
+              isReducedMotion={reducedMotion}
+              isHighVis={highVisibility}
+              onAnnounce={setAnnouncement}
+            />
           </motion.div>
         </AnimatePresence>
         

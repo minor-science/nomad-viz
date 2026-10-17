@@ -3,15 +3,17 @@ import Markdown from 'react-markdown';
 import { X, BookOpen, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+import type { ModelId } from '../sim/types';
+
 interface TheoryPanelProps {
-  modelType: 'fluid' | 'metallurgic' | 'acoustic' | 'cosmic';
+  modelType: ModelId;
   isOpen: boolean;
   onClose: () => void;
   isHighVis?: boolean;
 }
 
-const THEORY_DATA = {
-  fluid: {
+const THEORY_DATA: Record<ModelId, { title: string; subtitle: string; equations: string }> = {
+  hydraulic: {
     title: 'Hydraulic Model // Fluid Dynamics',
     subtitle: 'Laminar Flow vs. Vortical Turbulence',
     equations: `

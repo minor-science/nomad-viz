@@ -40,6 +40,10 @@
     box-shadow: 2px 2px 0px 0px #050505;
   }
 
+  .brutal-shadow-lg {
+    box-shadow: 8px 8px 0px 0px #050505;
+  }
+
   /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 8px;
