@@ -1,7 +1,7 @@
 import { Droplets } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
 import { Fluid } from '../sim/fluid';
-import { Regimes, CELLS, EDDIES } from '../sim/regimes';
+import { Regimes, LAYERS, CELLS, EDDIES } from '../sim/regimes';
 import { HeatPatches, Wobble } from '../sim/heating';
 import { Dye } from '../sim/dye';
 import { beginTags, drawTag, StickyTag } from '../sim/tags';
@@ -48,20 +48,20 @@ const GAINS: Caption[][] = [
       color: CYAN,
     },
     {
-      head: 'CAPTURE GAINS · As the surge passes, the conduit takes back the roaming journeymen and settles them into guilds and assigned channels (turbulence settles into laminar flow).',
+      head: 'CAPTURE GAINS · As the surge passes, the conduit takes back the roaming journeymen and settles them into guilds and the corvée (turbulence settles into laminar flow).',
       sub: '“Settling, sedentarizing labor power, regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).',
       color: CYAN,
     },
   ],
   [
     {
-      head: 'WARDING OFF GAINS · Segments form ahead of the conduit’s front: bands keep their labor in their own circles, so none of it reaches the State’s works (convection cells stop the laminar flow).',
+      head: 'WARDING OFF GAINS · Segments form ahead of the conduit’s front: bands keep their labor for themselves, so none of it reaches the State’s works (convection cells stop the laminar flow).',
       sub: 'War “maintains the dispersal and segmentarity of groups” (Plateaus: 357).',
       color: YELLOW,
     },
     { head: '', sub: '', color: YELLOW },
     {
-      head: 'WARDING OFF GAINS · The packs settle into segments, bands each working for themselves, none owing labor to a center (turbulence calms into convection cells).',
+      head: 'WARDING OFF GAINS · The packs settle into bands that work for themselves and leave no surplus to levy (turbulence calms into convection cells).',
       sub: '“the circles are not concentric, and the two segments require a third segment through which to communicate” (Plateaus: 433).',
       color: YELLOW,
     },
@@ -87,12 +87,12 @@ const HOLDING: Caption[] = [
     color: CYAN,
   },
   {
-    head: 'WARDING OFF HOLDS · Bands keep their work in their own circles, sharing out and dispersing where the conduit cannot draft them (convection cells).',
+    head: 'WARDING OFF HOLDS · Bands work for themselves and share what they make, out of the corvée’s reach (convection cells).',
     sub: 'The members of a band “disperse to eat or sleep separately,” so the leader cannot acquire stable power (Plateaus: 358).',
     color: YELLOW,
   },
   {
-    head: 'WAR MACHINE HOLDS · Masons, carpenters, and smiths move from site to site, off every channel the State assigns (turbulence).',
+    head: 'WAR MACHINE HOLDS · Masons, carpenters, and smiths move from site to site, outside the corvée and the guilds (turbulence).',
     sub: '“journeymen’s associations, or compagnonnages, the nomadic or itinerant bodies of the type formed by masons, carpenters, smiths” (Plateaus: 368).',
     color: MAGENTA,
   },
@@ -109,12 +109,12 @@ const MODE_CAPTION: Partial<Record<Mode, Caption>> = {
     color: CYAN,
   },
   nonstate: {
-    head: 'WARDING OFF ALONE · A weak draft and even heat: bands keep their work in their own circles, where none of it reaches the State’s works (convection cells).',
+    head: 'WARDING OFF ALONE · A weak draft and even heat: bands work for themselves, out of the corvée’s reach (convection cells).',
     sub: 'War “maintains the dispersal and segmentarity of groups” (Plateaus: 357).',
     color: YELLOW,
   },
   nomad: {
-    head: 'WAR MACHINE ALONE · Strong surges from below: labor leaves every channel and roams in packs across the whole space (turbulence).',
+    head: 'WAR MACHINE ALONE · Strong surges from below: labor escapes the corvée and roams in packs across the whole space (turbulence).',
     sub: '“The model is a vortical one; it operates in an open space throughout which things-flows are distributed” (Plateaus: 361).',
     color: MAGENTA,
   },
@@ -147,6 +147,9 @@ function create(): SimInstance {
   let acc = 0;
   let fronts: number[] = [];
   const history = { reach: [] as number[], held: [] as number[], scattered: [] as number[], heat: [] as number[] };
+  // What replaced a lost circle or pack, fixed when the loss is first reported.
+  let segmentFate: string | null = null;
+  let packFate: string | null = null;
   const tags = {
     conduit: new StickyTag<number>(400),
     segment: new StickyTag<{ x: number; y: number }>(300),
@@ -403,12 +406,19 @@ function create(): SimInstance {
               return fronts[best] > 12 ? { anchor: best, x: fronts[best] * sx, y: dye!.sources[best] * sy } : null;
             },
           );
-          tags.conduit.draw(ctx, 'CAPTURE · the draft’s front: labor marched from the villages toward the State’s works', CYAN, bounds, 'CAPTURE · the draft is cut short, and labor no longer reaches the works');
+          tags.conduit.draw(ctx, 'CAPTURE · the corvée’s reach: villagers marched toward the State’s works', CYAN, bounds, 'CAPTURE · the corvée falls short: no labor reaches the works');
         }
         if (mode === 'conflict' || mode === 'nonstate') {
           // A segment barely drifts, so its tag stays put while the circle lasts.
           tags.segment.update((a) => (share(a, CELLS) > 0.25 ? { x: a.x * sx, y: a.y * sy } : null), pick(CELLS));
-          tags.segment.draw(ctx, 'WARDING OFF · a segment: a band keeping its work in its own circle, owing none to a center', YELLOW, bounds, 'WARDING OFF · this band’s circle has broken open, its members drafted onto the works or gone onto the road');
+          // When a circle is gone, what replaced it says what happened to the band.
+          if (!tags.segment.lost) segmentFate = null;
+          else if (!segmentFate && tags.segment.current) {
+            segmentFate = share(tags.segment.current, LAYERS) >= share(tags.segment.current, EDDIES)
+              ? 'WARDING OFF · this band’s circle is broken, its labor drafted onto the State’s works'
+              : 'WARDING OFF · this band’s circle is broken, its members gone off as journeymen';
+          }
+          tags.segment.draw(ctx, 'WARDING OFF · a band working for itself, leaving no surplus to levy', YELLOW, bounds, segmentFate ?? 'WARDING OFF · this band’s circle is broken');
         }
         if (mode === 'conflict' || mode === 'nomad') {
           tags.pack.update((a) => {
@@ -418,9 +428,15 @@ function create(): SimInstance {
             if (a.x < 3 || a.x > NX - 3 || a.y < 2 || a.y > NY - 2) return null;
             return share(a, EDDIES) > 0.25 ? { x: a.x * sx, y: a.y * sy } : null;
           }, pick(EDDIES));
-          tags.pack.draw(ctx, 'WAR MACHINE · a pack: journeymen roaming from site to site, off every assigned channel', MAGENTA, bounds, 'WAR MACHINE · these journeymen have settled, drafted back into channels or taken into a band’s circle');
+          if (!tags.pack.lost) packFate = null;
+          else if (!packFate && tags.pack.current) {
+            packFate = share(tags.pack.current, LAYERS) >= share(tags.pack.current, CELLS)
+              ? 'WAR MACHINE · these journeymen were drafted back into the corvée'
+              : 'WAR MACHINE · these journeymen have settled into a band';
+          }
+          tags.pack.draw(ctx, 'WAR MACHINE · journeymen moving from site to site, outside the corvée and the guilds', MAGENTA, bounds, packFate ?? 'WAR MACHINE · these journeymen have stopped moving');
         }
-        drawTag(ctx, 4, dye.sources[0] * sy, 'the sources: the villages that supply the State’s labor', INK, bounds);
+        drawTag(ctx, 4, dye.sources[0] * sy, 'the sources: the villages where the corvée recruits', INK, bounds);
         if (mode !== 'state' && !even && floorMax > floorMean * 1.4) {
           const hx = floor.indexOf(floorMax);
           drawTag(ctx, hx * sx, height - sy, 'the upswell: labor moving on its own account, in “a rhythm without measure”', WARM, bounds);
@@ -447,7 +463,7 @@ export const hydraulic: ModelDef = {
   describe: (mode) =>
     `Hydraulic simulation in ${mode} mode: dye released from sources at the left into a liquid with a through-flow, heated unevenly from below. The dye stands for labor: cyan dye runs intact in its lane toward the far edge (drafted to the State’s works, laminar flow), yellow dye is held in small circles (kept by the bands, convection cells), magenta dye is scattered through the space (roaming in packs, turbulence).`,
   controls: [
-    { kind: 'slider', key: 'flow', label: 'Through-Flow (the draft)', min: 0, max: 0.8, step: 0.02, default: 0.4, tint: 'cyan', format: 'dec2' },
+    { kind: 'slider', key: 'flow', label: 'Through-Flow (the corvée)', min: 0, max: 0.8, step: 0.02, default: 0.4, tint: 'cyan', format: 'dec2' },
     { kind: 'slider', key: 'heat', label: 'Heat from Below (upswell)', min: 0.001, max: 0.012, step: 0.0005, default: 0.0045, tint: 'yellow', format: 'x1000' },
     { kind: 'slider', key: 'surge', label: 'Surges (unevenness)', min: 0, max: 2, step: 0.1, default: 1.2, tint: 'magenta', format: 'dec2' },
     { kind: 'slider', key: 'pace', label: 'Surge Pace', min: 0.0005, max: 0.006, step: 0.0005, default: 0.002, tint: 'magenta', format: 'x1000' },
@@ -460,15 +476,15 @@ export const hydraulic: ModelDef = {
     ['Heat', (p.heat * 1000).toFixed(1)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / Capture', text: 'The conduit: the State’s draft carries labor from the villages toward its works in assigned channels, with cyan ticks marking how far it reaches (laminar flow). The State is forever “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).' },
+    { process: 'capture', heading: '01 / Capture', text: 'The conduit: the State’s corvée marches labor from the villages toward its works, with cyan ticks marking how far it reaches (laminar flow). The State is forever “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).' },
     { process: 'warMachine', heading: '02 / War machine', text: 'Packs: when the upswell surges, labor slips its channels and roams in packs across the whole space, as the journeymen’s compagnonnages did (turbulence). “From turba to turbo” (Plateaus: 361), a movement “distributed by turbulence across a smooth space” (363).' },
     { process: 'wardingOff', heading: '03 / Warding off', text: 'Segments: bands keep their work in small circles of their own ahead of the conduit’s front, where the draft cannot get through (convection cells). War “maintains the dispersal and segmentarity of groups” (Plateaus: 357), and “the circles are not concentric” (433).' },
   ],
   legend: [
     { swatch: CYAN, see: 'Cyan dye and cyan ticks', social: 'labor drafted along the State’s channels, from the villages to its works, by corvée and by guild, the ticks marking how far the draft reaches', physics: 'laminar flow, each source’s dye staying in its lane (Reynolds 1883)', atp: 'the State “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368)', example: 'the corvée gangs on an empire’s canals (cf. Wittfogel, 363)' },
-    { swatch: YELLOW, see: 'Yellow dye', social: 'bands that keep their work in their own circles and share what they make, none owing labor to a center', physics: 'dye held in steady convection cells (Rayleigh-Bénard)', atp: 'war “maintains the dispersal and segmentarity of groups” (Plateaus: 357)', example: 'a band whose members “disperse to eat or sleep separately,” so no leader gains stable power (358)' },
-    { swatch: MAGENTA, see: 'Magenta dye', social: 'journeymen and nomads roaming from site to site, off every channel the State assigns', physics: 'dye scattered by turbulence', atp: '“From turba to turbo” (Plateaus: 361)', example: 'the compagnonnages of masons, carpenters, and smiths, “the nomadic or itinerant bodies” States have always had trouble with (368)' },
-    { swatch: INK, see: 'White dots at the left', social: 'the villages that supply the State’s labor', physics: 'dye injected at fixed heights', atp: 'movement “from one specified point to another” (Plateaus: 363)' },
+    { swatch: YELLOW, see: 'Yellow dye', social: 'bands that work for themselves and share what they make, leaving no surplus to levy', physics: 'dye held in steady convection cells (Rayleigh-Bénard)', atp: 'war “maintains the dispersal and segmentarity of groups” (Plateaus: 357)', example: 'a band whose members “disperse to eat or sleep separately,” so no leader gains stable power (358)' },
+    { swatch: MAGENTA, see: 'Magenta dye', social: 'journeymen moving from site to site, outside the corvée and the guilds', physics: 'dye scattered by turbulence', atp: '“From turba to turbo” (Plateaus: 361)', example: 'the compagnonnages of masons, carpenters, and smiths, “the nomadic or itinerant bodies” States have always had trouble with (368)' },
+    { swatch: INK, see: 'White dots at the left', social: 'the villages where the corvée recruits', physics: 'dye injected at fixed heights', atp: 'movement “from one specified point to another” (Plateaus: 363)' },
     { swatch: WARM, see: 'Glow along the bottom', social: 'the upswell: labor moving on its own account, uneven in place and time', physics: 'heaters under the floor that drift and surge on their own, while the through-flow wavers', atp: '“a rhythm without measure, which relates to the upswell of a flow” (Plateaus: 364)' },
   ],
   create,
