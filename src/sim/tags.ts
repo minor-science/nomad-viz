@@ -8,6 +8,11 @@ export function beginTags() {
   placed = [];
 }
 
+/** Mark an area (a readout, a caption) that tags should keep clear of. */
+export function reserve(x: number, y: number, w: number, h: number) {
+  placed.push({ x, y, w, h });
+}
+
 const overlaps = (a: { x: number; y: number; w: number; h: number }) =>
   placed.some((b) => a.x < b.x + b.w + 6 && b.x < a.x + a.w + 6 && a.y < b.y + b.h + 6 && b.y < a.y + a.h + 6);
 
@@ -112,11 +117,66 @@ export class StickyTag<A> {
   }
 
   /** Draw the tag; `lostText` replaces the text while the feature is gone. */
-  draw(ctx: CanvasRenderingContext2D, text: string, color: string, bounds: { width: number; height: number }, lostText?: string) {
+  draw(ctx: CanvasRenderingContext2D, text: string, color: string, bounds: { width: number; height: number }, lostText?: string, lostColor?: string) {
     if (this.alpha <= 0) return;
     ctx.save();
     ctx.globalAlpha = this.alpha * (this.lost ? 0.8 : 1);
-    drawTag(ctx, this.x, this.y, this.lost && lostText ? lostText : text, color, bounds);
+    drawTag(ctx, this.x, this.y, this.lost && lostText ? lostText : text, this.lost && lostColor ? lostColor : color, bounds);
     ctx.restore();
   }
+}
+
+// A caption box: a bold headline and a lighter second line, wrapped to a width. World units.
+export function drawCaption(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  maxW: number,
+  head: string,
+  sub: string,
+  color: string,
+) {
+  const wrap = (text: string, font: string) => {
+    ctx.font = font;
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let line = '';
+    for (const w of words) {
+      const t = line ? `${line} ${w}` : w;
+      if (ctx.measureText(t).width > maxW - 28 && line) {
+        lines.push(line);
+        line = w;
+      } else line = t;
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
+  const headFont = 'bold 22px "JetBrains Mono", monospace';
+  const subFont = '19px "Inter", sans-serif';
+  const hl = wrap(head, headFont);
+  const sl = wrap(sub, subFont);
+  const h = 18 + hl.length * 28 + sl.length * 25 + 8;
+  reserve(x, y, maxW, h);
+  ctx.save();
+  ctx.fillStyle = 'rgba(5, 5, 5, 0.82)';
+  ctx.fillRect(x, y, maxW, h);
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 6, h);
+  ctx.font = headFont;
+  hl.forEach((l, k) => ctx.fillText(l, x + 18, y + 30 + k * 28));
+  ctx.font = subFont;
+  ctx.fillStyle = '#d1d5db';
+  sl.forEach((l, k) => ctx.fillText(l, x + 18, y + 30 + hl.length * 28 + k * 25));
+  ctx.restore();
+}
+
+// A faint map label on the ground, letterspaced, centered on (x, y). World units.
+export function drawPlace(ctx: CanvasRenderingContext2D, x: number, y: number, text: string) {
+  ctx.save();
+  ctx.font = 'bold 34px "JetBrains Mono", monospace';
+  ctx.letterSpacing = '8px';
+  ctx.fillStyle = 'rgba(242, 242, 242, 0.16)';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, x, y);
+  ctx.restore();
 }

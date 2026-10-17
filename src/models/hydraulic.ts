@@ -2,7 +2,7 @@ import { Droplets } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Params } from '../sim/types';
 import { Fluid, type FluidParams } from '../sim/fluid';
 import { Embankments } from '../sim/embankments';
-import { beginTags, drawTag, StickyTag } from '../sim/tags';
+import { beginTags, reserve, drawCaption, drawPlace, drawTag, StickyTag } from '../sim/tags';
 
 // Grid height in cells. The width follows the canvas's aspect ratio.
 const NY = 72;
@@ -20,6 +20,51 @@ const TOWN = {
 // the town on its way through.
 const ENTRY_Y = 0.4;
 const EXIT_Y = 0.62;
+
+// The narrator's captions. In conflict mode the caption follows the phase of the cycle; in the other
+// modes it describes the one process staged. Quotations are checked by scripts/check-atp.ts.
+type Phase = 'regulated' | 'surge' | 'breakdown' | 'recapture';
+const PHASES: Record<Phase, { head: string; sub: string; color: string }> = {
+  regulated: {
+    head: 'REGULATED · Labor, goods, and people keep to the routes the State assigns them.',
+    sub: 'ATP: fixed paths that “restrict speed, regulate circulation, relativize movement” (386).',
+    color: '#00aeef',
+  },
+  surge: {
+    head: 'SURGE · Migrations press on the routes faster than they can be channeled.',
+    sub: 'ATP: States meet nomads “through the intermediary of the migrations the nomads trigger” (385).',
+    color: '#ec008c',
+  },
+  breakdown: {
+    head: 'BREAKDOWN · Routes give way. Flows go their own way, and vagabondage spreads.',
+    sub: 'ATP: the State “undertook to conquer both a band vagabondage and a body nomadism” (368).',
+    color: '#ec008c',
+  },
+  recapture: {
+    head: 'RE-CAPTURE · The State re-routes and re-registers the flows, and crews rebuild the works.',
+    sub: 'ATP: the State relies on “forced manpower recruited on the spot (corvee)” (368).',
+    color: '#00aeef',
+  },
+};
+const MODE_CAPTION: Partial<Record<Mode, { head: string; sub: string; color: string }>> = {
+  state: {
+    head: 'CAPTURE ALONE · Every flow is kept to an assigned route. Nothing turns or leaves its channel.',
+    sub: 'ATP: “regulating the movement of the flow of labor, assigning it channels and conduits” (368).',
+    color: '#00aeef',
+  },
+  nomad: {
+    head: 'WAR MACHINE ALONE · Open country. Flows turn and hold their own ground, as itinerant builders once moved from site to site.',
+    sub: 'ATP: “the nomadic or itinerant bodies of the type formed by masons, carpenters, smiths” (368).',
+    color: '#ec008c',
+  },
+  town: {
+    head: 'POLARIZATION ALONE · The market town. Every flow enters by one gate, circulates, and leaves by another.',
+    sub: 'ATP: “maritime and commercial towns to separate off from the backcountry” (432), such as Athens, Carthage, Venice.',
+    color: '#2f8f4e',
+  },
+};
+// Frames a phase caption stays up before it may change.
+const PHASE_HOLD = 300;
 
 interface Tracer {
   x: number;
@@ -72,6 +117,8 @@ function create(): SimInstance {
   let channelCross: number[] = [];
   let lastParams: FluidParams = { nu: 0, uTop: 1, uBottom: 0, clinamen: 0, confinement: 0 };
   const vortexTag = new StickyTag<{ x: number; y: number }>(300);
+  let phase: Phase = 'regulated';
+  let phaseAge = 0;
   const breachTag = new StickyTag<number>(300);
   const bankTag = new StickyTag<number>(300);
   // Streak trails fade on their own layer, so tags and the readout stay crisp on top.
@@ -257,10 +304,44 @@ function create(): SimInstance {
       main.drawImage(trail, 0, 0);
       main.restore();
 
-      // Explain layer: each tag says what is happening and what it stands for.
+      // Explain layer: map labels on the ground, a narrator's caption, and tags that say what each
+      // feature stands for.
       if (f.explain) {
         beginTags();
+        reserve(16, 16, 560, 108);
         const bounds = { width, height };
+        const place = (fx: number, fy: number, text: string) => drawPlace(ctx, fx * width, fy * height, text);
+        if (mode === 'state') place(0.5, 0.58, 'THE STATE’S CHANNELS');
+        if (mode === 'nomad') place(0.6, 0.58, 'OPEN COUNTRY');
+        if (mode === 'town') {
+          place(0.2, 0.58, 'COUNTRYSIDE');
+          place((TOWN.town.entry + TOWN.town.exit) / 2, 0.22, 'THE TOWN');
+          place(0.82, 0.58, 'TO OTHER TOWNS');
+        }
+        if (mode === 'conflict') {
+          place(BANKS_END / 2, 0.58, 'THE STATE’S CHANNELS');
+          place((TOWN.conflict.entry + TOWN.conflict.exit) / 2, 0.22, 'THE TOWN');
+        }
+        // Narration: in conflict, the phase of the cycle, held for a few seconds at a time.
+        let cap = MODE_CAPTION[mode];
+        if (mode === 'conflict') {
+          const want: Phase =
+            standing > 0.85 && season > 0.25 ? 'surge'
+            : standing <= 0.85 && season > -0.2 ? 'breakdown'
+            : standing < 0.97 ? 'recapture'
+            : 'regulated';
+          phaseAge++;
+          if (want !== phase && phaseAge > (phase === 'breakdown' && standing > 0.95 ? PHASE_HOLD / 3 : PHASE_HOLD)) {
+            phase = want;
+            phaseAge = 0;
+          }
+          cap = PHASES[phase];
+        }
+        if (cap) {
+          const cw = Math.min(width - 32, Math.max(560, width * 0.46));
+          const cx = width - cw - 16;
+          drawCaption(ctx, cx, 16, cw, cap.head, cap.sub, cap.color);
+        }
         drawTag(ctx, 6, (ny * 0.25) * sy, 'INFLOW · flows of people, goods, and labor', '#f2f2f2', bounds);
         if (banks && season > 0.5) drawTag(ctx, nx * 0.3 * sx, 3 * sy, 'SURGE · migration and flight beyond what the routes can hold', '#ec008c', bounds);
         // A vortex, followed as it drifts with the water.
@@ -294,8 +375,12 @@ function create(): SimInstance {
         if (channeled) {
           const rows = [0, ...bankRows(K, ny), ny - 1];
           const xEnd = mode === 'state' ? 0.9 : BANKS_END - 0.05;
+          const shown = new Set<boolean>();
           for (let c = 0; c < K; c++) {
             const turbulent = channelCross[c] > TURBULENT;
+            // One example of each state is enough.
+            if (shown.has(turbulent)) continue;
+            shown.add(turbulent);
             const label = turbulent
               ? `WAR MACHINE · vagabondage: flows leave their assigned routes`
               : `CAPTURE · labor and goods kept to assigned routes`;
@@ -311,7 +396,7 @@ function create(): SimInstance {
               return null;
             },
           );
-          breachTag.draw(ctx, 'WAR MACHINE · a route breaks down; flows go their own way', '#ec008c', bounds, 'CAPTURE · the State re-routes and re-registers them');
+          breachTag.draw(ctx, 'WAR MACHINE · a route breaks down; flows go their own way', '#ec008c', bounds, 'CAPTURE · the State re-routes and re-registers them', '#00aeef');
           bankTag.update(
             (i) => (fluid!.solid[i] && bk.integrity[i] >= 0 ? { x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy } : null),
             () => {
@@ -319,11 +404,11 @@ function create(): SimInstance {
               return null;
             },
           );
-          bankTag.draw(ctx, 'CAPTURE · a fixed path that regulates circulation', '#00aeef', bounds, 'WAR MACHINE · the path gives way');
+          bankTag.draw(ctx, 'CAPTURE · a fixed path that regulates circulation', '#00aeef', bounds, 'WAR MACHINE · the path gives way', '#ec008c');
         }
         if (mode === 'town' || mode === 'conflict') {
           const t = TOWN[mode];
-          drawTag(ctx, nx * t.entry * sx, ny * ENTRY_Y * sy, 'POLARIZATION · the market town: everything enters by its gate', '#2f8f4e', bounds);
+          drawTag(ctx, nx * t.entry * sx, ny * ENTRY_Y * sy, 'POLARIZATION · the market town: everything enters by its gate, as at Venice', '#2f8f4e', bounds);
           drawTag(ctx, nx * t.exit * sx, ny * EXIT_Y * sy, 'POLARIZATION · and leaves by another, toward other towns', '#2f8f4e', bounds);
         }
       }
@@ -391,7 +476,7 @@ export const hydraulic: ModelDef = {
     { swatch: '#ec008c', see: 'Magenta streaks', social: 'flows off the assigned routes, holding their own ground: vagabondage, nomadism', physics: 'water turning in eddies (high vorticity)', atp: 'a movement “distributed by turbulence” (363), which the State sets out to conquer as “a band vagabondage” (368)', example: 'the itinerant masons, carpenters, and smiths of ATP 368' },
     { swatch: '#94a3b8', see: 'Gray banks', social: 'the State’s fixed paths: roads, registers, assigned work', physics: 'walls that narrow the flow and lower its Reynolds number; they fade as they erode', atp: 'the flow of labor assigned “channels and conduits” (368)' },
     { swatch: '#cbd5e1', see: 'Breaches', social: 'routes breaking under a surge of migration or flight, then re-established', physics: 'erosion where the flow passes a critical speed, repair in calm water', atp: 'smooth and striated “exist only in mixture” (474)' },
-    { swatch: '#2f8f4e', see: 'Two walls with gates', social: 'a market town or port that every flow must pass through', physics: 'water forced in at one gate and out at another, circling the basin between', atp: 'the town “is defined by entries and exits” (432)', example: 'the Hanse, Venice' },
+    { swatch: '#2f8f4e', see: 'Two walls with gates', social: 'a market town or port that every flow must pass through', physics: 'water forced in at one gate and out at another, circling the basin between', atp: 'the town “is defined by entries and exits” (432)', example: 'Athens, Carthage, Venice, ATP’s maritime and commercial towns (432)' },
   ],
   create,
 };

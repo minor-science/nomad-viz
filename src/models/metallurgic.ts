@@ -3,7 +3,7 @@ import type { ModelDef, SimInstance, Frame } from '../sim/types';
 import { LatticeGas, criticalSize, type LatticeParams } from '../sim/latticeGas';
 import { Smiths } from '../sim/smiths';
 import { Bands } from '../sim/bands';
-import { beginTags, StickyTag } from '../sim/tags';
+import { beginTags, reserve, StickyTag } from '../sim/tags';
 
 // Lattice cell, in world units (two per CSS pixel).
 const CELL = 10;
@@ -216,6 +216,7 @@ function create(): SimInstance {
       // Explain layer: each tag holds on to one feature for a few seconds and follows it.
       if (f.explain) {
         beginTags();
+        reserve(16, 16, 560, 176);
         const bounds = { width: f.width, height: f.height };
         const centroid = (site: number) => {
           const id = lg!.cid[site];
@@ -254,7 +255,7 @@ function create(): SimInstance {
           const site = tags.embryo.current;
           const grew = site !== null && lg.occ[site] && lg.cid[site] >= 0 && clusters[lg.cid[site]].size >= threshold;
           tags.embryo.draw(ctx, 'embryo · a formation of power that may dissolve', '#cbd5e1', bounds,
-            grew ? 'embryo · passed the threshold for growth' : 'embryo · dissolved before the threshold');
+            grew ? 'embryo · passed the threshold for growth' : 'embryo · dissolved before the threshold', grew ? '#00aeef' : undefined);
         }
         if (warding && bands.list.length) {
           tags.band.update(
