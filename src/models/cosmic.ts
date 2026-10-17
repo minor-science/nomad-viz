@@ -28,7 +28,7 @@ const GRAY = '#64748b';
 const INK = '#f2f2f2';
 
 type Caption = { head: string; sub: string; color: string };
-type Event = 'stripped' | 'scatter' | 'caught' | 'absorbed' | 'formed' | 'tighten';
+type Event = 'stripped' | 'raid' | 'scatter' | 'caught' | 'absorbed' | 'formed' | 'tighten';
 
 // The narrator reports events, since the three relate to one another in different ways.
 const EVENTS: Record<Event, Caption> = {
@@ -36,6 +36,11 @@ const EVENTS: Record<Event, Caption> = {
     head: 'CAPTURE · OVERCODING · The capital city’s crowd slows a society until it sinks within reach of the tides, which strip its members into the capital city’s orbits. The society no longer runs on its own code (tidal stripping).',
     sub: 'Capture “contributes to the creation of that which it captures” (Plateaus: 448).',
     color: CYAN,
+  },
+  raid: {
+    head: 'WAR MACHINE · THE RAID · A company falls through the capital city at full speed, flings its bodies out, carries some off as followers, and rides on (a fly-by through the center).',
+    sub: '“the raid can be seen as another object, rather than as a particular form of war” (Plateaus: 417).',
+    color: MAGENTA,
   },
   scatter: {
     head: 'WAR MACHINE · WAR ON THE STATE · A company tears through the capital city, and the bodies held in its orbits are flung out across the field (a gravitational fly-by).',
@@ -114,7 +119,7 @@ function create(): SimInstance {
   const wobble = new Wobble();
   let px = new Float32Array(0);
   let py = new Float32Array(0);
-  let last = { societies: 0, absorbed: 0, caught: 0, held: 0, frame: 0 };
+  let last = { societies: 0, absorbed: 0, caught: 0, held: 0, frame: 0, raids: 0 };
   let heldTrend: number[] = [];
   const history = { held: [] as number[], societies: [] as number[], companies: [] as number[], army: [] as number[] };
   let societyFate: string | null = null;
@@ -124,6 +129,7 @@ function create(): SimInstance {
     company: new StickyTag<number>(400),
   };
   let companyWas = COMPANY;
+  let companyRaided = false;
 
   return {
     init(_w, _h, params) {
@@ -135,7 +141,7 @@ function create(): SimInstance {
       for (let k = 0; k < 14; k++) orbits.addSociety(22 + 22 * Math.random(), Math.random() * 2 * Math.PI, params.capital);
       for (const k of Object.keys(history) as (keyof typeof history)[]) history[k].length = 0;
       heldTrend = [];
-      last = { societies: orbits.societies(), absorbed: 0, caught: 0, held: 0, frame: 0 };
+      last = { societies: orbits.societies(), absorbed: 0, caught: 0, held: 0, frame: 0, raids: 0 };
     },
 
     frame(ctx, f: Frame) {
@@ -169,7 +175,9 @@ function create(): SimInstance {
         due += rate * (mode === 'conflict' ? wobble.step(params.surge, 0.002) : 1);
         if (due >= 1) {
           due -= 1;
-          orbits.addCompany(1);
+          // A share of the companies ride straight at the capital city: raiders, heavier than the rest.
+          const raid = Math.random() < params.raids;
+          orbits.addCompany(1, raid, raid ? params.raidMass : params.companyMass);
         }
         orbits.step(p);
       }
@@ -247,13 +255,15 @@ function create(): SimInstance {
       // Narration: events first, then what holds.
       last.frame++;
       let event: Event | null = null;
-      if (societies < last.societies) event = 'stripped';
+      if (orbits.raids > last.raids) event = 'raid';
+      else if (societies < last.societies) event = 'stripped';
       else if (orbits.absorbed > last.absorbed) event = 'absorbed';
       else if (co.caught > last.caught) event = 'caught';
       else if (heldTrend.length === 90 && heldTrend[0] - shares.held > 0.08 && co.total - co.caught > 0) event = 'scatter';
       else if (societies > last.societies) event = 'formed';
       else if (orbits.socAlarm.some((a, s) => a && orbits!.socCount[s] >= 4) && p.cool > 0) event = 'tighten';
       last.societies = societies;
+      last.raids = orbits.raids;
       last.absorbed = orbits.absorbed;
       last.caught = co.caught;
       if (mode === 'conflict') {
@@ -333,13 +343,20 @@ function create(): SimInstance {
             },
           );
           const i = tags.company.current;
-          if (i !== null && i < orbits.n && orbits.isCompany[i]) companyWas = orbits.kind[i];
+          if (i !== null && i < orbits.n && orbits.isCompany[i]) {
+            companyWas = orbits.kind[i];
+            companyRaided = orbits.contacted[i] === 1;
+          }
           tags.company.draw(
             ctx,
             companyWas === ARMY ? 'CAPTURE · a company caught in orbit: the capital city’s army now' : 'WAR MACHINE · a company on its own course, outside every orbit',
             companyWas === ARMY ? CYAN : MAGENTA,
             bounds,
-            companyWas === ARMY ? 'CAPTURE · this company was absorbed into the capital city’s army' : 'WAR MACHINE · this company rode off the field',
+            companyWas === ARMY
+              ? 'CAPTURE · this company was absorbed into the capital city’s army'
+              : companyRaided
+                ? 'WAR MACHINE · this company tore through the capital city and rode on'
+                : 'WAR MACHINE · this company rode off the field',
           );
         }
         void drawTag;
@@ -370,7 +387,9 @@ export const cosmic: ModelDef = {
     { kind: 'slider', key: 'alarm', label: 'Societies’ Alarm (size to tidal radius)', min: 0.2, max: 1, step: 0.05, default: 0.5, tint: 'yellow', format: 'dec2' },
     { kind: 'slider', key: 'cool', label: 'Societies’ Tightening', min: 0, max: 1, step: 0.05, default: 0.5, tint: 'yellow', format: 'dec2' },
     { kind: 'slider', key: 'rate', label: 'Companies Arriving', min: 0, max: 0.04, step: 0.001, default: 0.02, tint: 'magenta', format: 'x1000' },
-    { kind: 'slider', key: 'companyMass', label: 'Company Mass', min: 20, max: 300, step: 10, default: 70, tint: 'magenta', format: 'int', reinit: true },
+    { kind: 'slider', key: 'companyMass', label: 'Company Mass', min: 20, max: 300, step: 10, default: 70, tint: 'magenta', format: 'int' },
+    { kind: 'slider', key: 'raids', label: 'Share That Raid the Capital City', min: 0, max: 1, step: 0.05, default: 0.15, tint: 'magenta', format: 'pct' },
+    { kind: 'slider', key: 'raidMass', label: 'Raider Mass', min: 20, max: 300, step: 10, default: 150, tint: 'magenta', format: 'int' },
     { kind: 'slider', key: 'surge', label: 'Surges (unevenness)', min: 0, max: 2.5, step: 0.1, default: 1, tint: 'magenta', format: 'dec2' },
     { kind: 'slider', key: 'speed', label: 'Steps per Snapshot', min: 1, max: 12, step: 1, default: 4, tint: 'ink', format: 'int', divider: true },
   ],

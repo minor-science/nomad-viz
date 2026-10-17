@@ -40,6 +40,7 @@ export class Orbits {
   readonly soc: Int16Array; // society id, or -1
   readonly isCompany: Uint8Array;
   readonly bound: Uint16Array; // steps a company has spent caught in orbit
+  readonly contacted: Uint8Array; // 1 once a company has passed through the capital city
   readonly kind: Uint8Array;
   private ax: Float32Array;
   private ay: Float32Array;
@@ -59,6 +60,10 @@ export class Orbits {
   private nextSoc = 0;
   /** Companies that sank to the center in orbit and were absorbed into the capital's army. */
   absorbed = 0;
+  /** Raids: companies that passed through the capital city and rode off the field. */
+  raids = 0;
+  /** Distance from the center within which a company counts as having met the capital city. */
+  contactRadius = 14;
   /** Radius within which a caught company is absorbed. */
   armyRadius = 3;
   /** Steps in orbit after which a caught company is absorbed. */
@@ -87,6 +92,7 @@ export class Orbits {
     this.soc = new Int16Array(cap);
     this.isCompany = new Uint8Array(cap);
     this.bound = new Uint16Array(cap);
+    this.contacted = new Uint8Array(cap);
     this.kind = new Uint8Array(cap);
     this.ax = new Float32Array(cap);
     this.ay = new Float32Array(cap);
@@ -119,21 +125,24 @@ export class Orbits {
     }
   }
 
-  /** Send in a company from the left or right edge, aimed at any point on the far edge: some
-   *  cross open ground, and some pass close enough to the capital to meet it. */
-  addCompany(speed: number) {
+  /** Send in a company from the left or right edge. A raider aims at the capital city; any other
+   *  company aims at a point on the far edge, crossing open ground. */
+  addCompany(speed: number, raid = false, mass = this.companyMass) {
     if (this.n >= this.cap) return;
     const i = this.n++;
     const fromLeft = this.rand() < 0.5;
     this.x[i] = fromLeft ? 1 : this.w - 1;
     this.y[i] = this.h * (0.1 + 0.8 * this.rand());
-    const aim = Math.atan2(this.h * (0.1 + 0.8 * this.rand()) - this.y[i], (fromLeft ? this.w : 0) - this.x[i]);
+    const aim = raid
+      ? Math.atan2(this.cy + (this.rand() - 0.5) * 8 - this.y[i], this.cx - this.x[i])
+      : Math.atan2(this.h * (0.1 + 0.8 * this.rand()) - this.y[i], (fromLeft ? this.w : 0) - this.x[i]);
     this.vx[i] = Math.cos(aim) * speed;
     this.vy[i] = Math.sin(aim) * speed;
-    this.m[i] = this.companyMass;
+    this.m[i] = mass;
     this.soc[i] = -1;
     this.isCompany[i] = 1;
     this.bound[i] = 0;
+    this.contacted[i] = 0;
   }
 
   private remove(i: number) {
@@ -143,6 +152,7 @@ export class Orbits {
     this.soc[i] = this.soc[j];
     this.isCompany[i] = this.isCompany[j];
     this.bound[i] = this.bound[j];
+    this.contacted[i] = this.contacted[j];
     this.kind[i] = this.kind[j];
   }
 
@@ -296,9 +306,14 @@ export class Orbits {
         this.remove(i);
       }
     }
-    // Bodies that leave the field are gone; they return later as new societies at its edges.
+    // Bodies that leave the field are gone; they return later as new societies at its edges. A
+    // company that met the capital city on the way out has made a raid.
     for (let i = this.n - 1; i >= 0; i--) {
-      if (x[i] < -10 || x[i] > this.w + 10 || y[i] < -10 || y[i] > this.h + 10) this.remove(i);
+      if (this.isCompany[i] && Math.hypot(x[i] - this.cx, y[i] - this.cy) < this.contactRadius) this.contacted[i] = 1;
+      if (x[i] < -10 || x[i] > this.w + 10 || y[i] < -10 || y[i] > this.h + 10) {
+        if (this.isCompany[i] && this.contacted[i]) this.raids++;
+        this.remove(i);
+      }
     }
     // Scattered people regroup into new societies, as long as there are fewer than `societyLimit`.
     while (this.pool >= this.societySize && this.societies() < this.societyLimit) {
