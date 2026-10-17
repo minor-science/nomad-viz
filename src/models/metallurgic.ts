@@ -103,7 +103,8 @@ function create(): SimInstance {
   let sinceShift = 0;
   const tags = {
     capture: new StickyTag<number>(),
-    embryo: new StickyTag<number>(240, 45),
+    // The embryo tag reports its outcome, whether it grew or dissolved, however briefly it was shown.
+    embryo: new StickyTag<number>(240, 60, 0),
     band: new StickyTag<number>(),
     smith: new StickyTag<number>(),
   };

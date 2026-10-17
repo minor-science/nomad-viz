@@ -407,7 +407,7 @@ function create(): SimInstance {
         }
         if (mode === 'conflict' || mode === 'nonstate') {
           // A segment barely drifts, so its tag stays put while the circle lasts.
-          tags.segment.update((a) => (share(a, CELLS) > 0.35 ? { x: a.x * sx, y: a.y * sy } : null), pick(CELLS));
+          tags.segment.update((a) => (share(a, CELLS) > 0.25 ? { x: a.x * sx, y: a.y * sy } : null), pick(CELLS));
           tags.segment.draw(ctx, 'WARDING OFF · a segment: a band keeping its work in its own circle, owing none to a center', YELLOW, bounds, 'WARDING OFF · this band’s circle has broken open, its members drafted onto the works or gone onto the road');
         }
         if (mode === 'conflict' || mode === 'nomad') {
@@ -416,7 +416,7 @@ function create(): SimInstance {
             a.x += u * Math.max(1, steps) * 0.5;
             a.y += v * Math.max(1, steps) * 0.5;
             if (a.x < 3 || a.x > NX - 3 || a.y < 2 || a.y > NY - 2) return null;
-            return share(a, EDDIES) > 0.35 ? { x: a.x * sx, y: a.y * sy } : null;
+            return share(a, EDDIES) > 0.25 ? { x: a.x * sx, y: a.y * sy } : null;
           }, pick(EDDIES));
           tags.pack.draw(ctx, 'WAR MACHINE · a pack: journeymen roaming from site to site, off every assigned channel', MAGENTA, bounds, 'WAR MACHINE · these journeymen have settled, drafted back into channels or taken into a band’s circle');
         }

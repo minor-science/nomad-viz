@@ -111,14 +111,20 @@ export function drawTag(
 export class StickyTag<A> {
   x = 0;
   y = 0;
-  /** True while the tag outlives a feature that has disappeared. */
+  /** True while the tag reports on a feature that has disappeared. */
   lost = false;
   private anchor: A | null = null;
-  /** The feature currently tagged (null if none). */
+  /** The feature currently tagged, kept while its loss is reported (null if none). */
   get current(): A | null {
     return this.anchor;
   }
   private age = 0;
+  // Frames the current feature has been shown live, and frames left to report its loss.
+  private live = 0;
+  private lostLeft = 0;
+  // Fading out before picking another feature, so the tag never jumps across the canvas.
+  private fading = false;
+  private hasLostText = false;
   private alpha = 0;
   private box: Glide = {};
   // First stage of the anchor's smoothing; x and y follow this, so jitter is filtered twice.
@@ -126,38 +132,66 @@ export class StickyTag<A> {
   private fy = 0;
   private dwell: number;
   private minDwell: number;
+  private readable: number;
   /**
    * @param dwell frames before the tag looks for a new feature
-   * @param minDwell frames a tag stays put, even if its feature disappears first
+   * @param minDwell for an outcome tag (readable 0), frames its outcome is reported, every time
+   * @param readable frames a feature must have been shown before its loss is reported at all;
+   *   the report then lasts about half as long as the feature was shown, so it never outstays it
    */
-  constructor(dwell = 240, minDwell = 150) {
+  constructor(dwell = 240, minDwell = 150, readable = 60) {
     this.dwell = dwell;
     this.minDwell = minDwell;
+    this.readable = readable;
   }
 
   update(locate: (a: A) => { x: number; y: number } | null, pick: () => { anchor: A; x: number; y: number } | null) {
-    let pos = this.anchor !== null && !this.lost ? locate(this.anchor) : null;
-    // A feature that vanishes early keeps its tag in place until the minimum time is up.
-    if (!pos && this.anchor !== null && this.age < this.minDwell) {
-      this.lost = true;
-      this.alpha = Math.min(1, this.alpha + 0.08);
-      this.age++;
-      return;
+    let pos = this.anchor !== null && !this.lost && !this.fading ? locate(this.anchor) : null;
+    if (this.anchor !== null && !this.lost && !this.fading && !pos) {
+      // The feature has just disappeared: report it, or fade out quietly if it was barely shown.
+      const report = !this.hasLostText
+        ? 0
+        : this.readable === 0
+          ? this.minDwell
+          : this.live >= this.readable
+            ? Math.min(90, Math.max(45, this.live / 2))
+            : 0;
+      if (report > 0) {
+        this.lost = true;
+        this.lostLeft = report;
+      } else this.fading = true;
     }
-    if (!pos || this.age > this.dwell) {
+    if (this.lost) {
+      if (this.lostLeft-- > 0) {
+        this.alpha = Math.min(1, this.alpha + 0.08);
+        this.age++;
+        return;
+      }
+      this.fading = true;
+    }
+    if (this.fading || this.anchor === null) {
+      if (this.alpha > 0) {
+        this.alpha = Math.max(0, this.alpha - 0.08);
+        return;
+      }
+      this.fading = false;
+      this.lost = false;
+      const p = pick();
+      this.anchor = p ? p.anchor : null;
+      if (!p) return;
+      this.x = this.fx = p.x;
+      this.y = this.fy = p.y;
+      pos = { x: p.x, y: p.y };
+      this.age = 0;
+      this.live = 0;
+    } else if (this.age > this.dwell) {
+      // Time to move on: the tag glides over to the next feature.
       const p = pick();
       if (p) {
-        if (this.anchor === null || !pos) {
-          this.x = this.fx = p.x;
-          this.y = this.fy = p.y;
-        }
         this.anchor = p.anchor;
-        this.lost = false;
         pos = { x: p.x, y: p.y };
         this.age = 0;
-      } else if (!pos) {
-        this.anchor = null;
-        this.lost = false;
+        this.live = 0;
       }
     }
     if (pos) {
@@ -168,14 +202,14 @@ export class StickyTag<A> {
       this.x += (this.fx - this.x) * 0.12;
       this.y += (this.fy - this.y) * 0.12;
       this.alpha = Math.min(1, this.alpha + 0.08);
-    } else {
-      this.alpha = Math.max(0, this.alpha - 0.05);
+      this.live++;
     }
     this.age++;
   }
 
   /** Draw the tag; `lostText` replaces the text while the feature is gone. */
   draw(ctx: CanvasRenderingContext2D, text: string, color: string, bounds: { width: number; height: number }, lostText?: string, lostColor?: string) {
+    this.hasLostText = lostText !== undefined;
     if (this.alpha <= 0) {
       this.box = {};
       return;
