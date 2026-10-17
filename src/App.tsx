@@ -18,10 +18,10 @@ import { Book } from './components/Book';
 
 // The processes staged so far, in the charts' order (Axiom I, 351). Quotations are checked by scripts/check-atp.ts.
 const FRAMEWORK: { id: ProcessId; text: string }[] = [
-  { id: 'wardingOff', text: 'Primitive societies. Mechanisms that keep an apparatus “from crystallizing” (Plateaus: 357, cf. Clastres).' },
-  { id: 'warMachine', text: 'Nomads. A movement “distributed by turbulence across a smooth space” (Plateaus: 363).' },
-  { id: 'capture', text: 'States. Striating space “so as to render it homogeneous” (Plateaus: 370).' },
-  { id: 'polarization', text: 'Towns. A circuit “defined by entries and exits” (Plateaus: 432).' },
+  { id: 'wardingOff', text: 'Primitive societies: mechanisms that keep an apparatus “from crystallizing” (Plateaus: 357, cf. Clastres).' },
+  { id: 'warMachine', text: 'Nomads: a movement “distributed by turbulence across a smooth space” (Plateaus: 363).' },
+  { id: 'capture', text: 'States: striating space “so as to render it homogeneous” (Plateaus: 370).' },
+  { id: 'polarization', text: 'Towns: a circuit “defined by entries and exits” (Plateaus: 432).' },
 ];
 
 const ACTIVE_ICON: Record<ModelId, string> = {

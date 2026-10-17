@@ -166,9 +166,9 @@ export const acoustic: ModelDef = {
     ['Dust', String(p.particleCount)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / Capture', text: 'Resonance. Dust settles on the still lines of a plate ringing in one mode. Each State is “a redundancy of resonance (not of frequency)” (Plateaus: 433).' },
-    { process: 'warMachine', heading: '02 / War machine', text: 'Crossing. Dust moves across the still lines instead of settling on them. Plateaus, after Boulez: “in a smooth space-time one occupies without counting” (477).' },
-    { process: 'wardingOff', heading: '03 / Warding off', text: 'Silence zones. Dust inside them ignores the plate. These zones are random agitation, not real interference (see Sources).' },
+    { process: 'capture', heading: '01 / Capture', text: 'Resonance: dust settles on the still lines of a plate ringing in one mode. Each State is “a redundancy of resonance (not of frequency)” (Plateaus: 433).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Crossing: dust moves across the still lines instead of settling on them. Plateaus, citing Boulez: “in a smooth space-time one occupies without counting” (477).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Silence zones: dust inside them ignores the plate. These zones are random agitation, not real interference (see Sources).' },
   ],
   legend: [
     { swatch: '#00aeef', see: 'Cyan dust', physics: 'grains drifting toward the lines of a vibrating plate that stay still', atp: 'capture as resonance, “a redundancy of resonance (not of frequency)” (Plateaus: 433)' },

@@ -235,13 +235,13 @@ export const cosmic: ModelDef = {
     ['Particles', String(p.particleCount)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / Capture', text: 'Gravity. Bodies are pulled into rings around a center. Universal attraction became royal science’s “law of all laws” (Plateaus: 370).' },
-    { process: 'warMachine', heading: '02 / War machine', text: 'Escape. Bodies are kicked off their rings. Plateaus’ figure here is the swerve, “the minimum angle, which deviates from the vertical” (489).' },
-    { process: 'wardingOff', heading: '03 / Warding off', text: 'Voids. Zones push bodies outward so that no ring can form there.' },
+    { process: 'capture', heading: '01 / Capture', text: 'Gravity: bodies are pulled into rings around a center. Universal attraction became royal science’s “law of all laws” (Plateaus: 370).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Escape: bodies are kicked out of their rings. The figure in Plateaus is the swerve, “the minimum angle, which deviates from the vertical” (489).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Voids: zones push bodies outward so that no ring can form there.' },
   ],
   legend: [
     { swatch: '#00aeef', see: 'Cyan bodies in rings', physics: 'bodies pulled toward a center and steered into fixed rings (not Newtonian)', atp: 'capture by gravity, royal science’s “law of all laws” (Plateaus: 370)' },
-    { swatch: '#ec008c', see: 'Magenta bodies', physics: 'random kicks off the rings', atp: 'the war machine; Plateaus’ figure is the swerve, “the minimum angle” (489)' },
+    { swatch: '#ec008c', see: 'Magenta bodies', physics: 'random kicks off the rings', atp: 'the war machine, whose figure in Plateaus is the swerve, “the minimum angle” (489)' },
     { swatch: '#b8860b', see: 'Yellow circles', physics: 'zones that push bodies outward', atp: 'warding off, in this early version only roughly modeled' },
     { swatch: '#94a3b8', see: 'Gray bodies', physics: 'bodies drifting', atp: 'no process acting on them at the moment' },
   ],

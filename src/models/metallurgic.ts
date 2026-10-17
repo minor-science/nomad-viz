@@ -46,7 +46,7 @@ function grainColor(o: number, Q: number): [number, number, number] {
 type Phase = 'dispersed' | 'crystallizing' | 'warding';
 const PHASES: Record<Phase, { head: string; sub: string; color: string }> = {
   dispersed: {
-    head: 'DISPERSED · Power forms and dissolves. Nothing yet holds as a stock.',
+    head: 'DISPERSED · Formations of power appear and dissolve before any of them can hold as a stock.',
     sub: 'Mechanisms keep central points “from crystallizing, from taking on consistency” (Plateaus: 433).',
     color: '#cbd5e1',
   },
@@ -56,14 +56,14 @@ const PHASES: Record<Phase, { head: string; sub: string; color: string }> = {
     color: '#00aeef',
   },
   warding: {
-    head: 'WARDING OFF · The bands mobilize and wear the stock down, destroying rather than keeping.',
+    head: 'WARDING OFF · The bands mobilize and wear down the stock, destroying what a State would keep.',
     sub: '“depletion is the means by which primitive groups ward off the stock” (Plateaus: 440).',
     color: '#e0a800',
   },
 };
 const MODE_CAPTION: Partial<Record<Mode, { head: string; sub: string; color: string }>> = {
   state: {
-    head: 'CAPTURE ALONE · Nothing holds the threshold at a distance. Once a stock forms, it grows.',
+    head: 'CAPTURE ALONE · With no bands to hold the threshold at a distance, the first stock to form keeps growing.',
     sub: 'An apparatus distinct from the social body “crystallizing” (Plateaus: 357).',
     color: '#00aeef',
   },
@@ -281,7 +281,7 @@ function create(): SimInstance {
             return { anchor: siteOf(big.id), x: (big.cx + 0.5) * sx, y: (big.cy + 0.5) * sy };
           },
         );
-        tags.capture.draw(ctx, 'CAPTURE · a stock, crystallized past the threshold', '#00aeef', bounds, 'CAPTURE · this stock was worn away or carved apart');
+        tags.capture.draw(ctx, 'CAPTURE · a stock, crystallized past the threshold', '#00aeef', bounds, 'CAPTURE · this stock is gone, worn down by bands or carved through by smiths');
         tags.embryo.update(
           (site) => {
             const r = centroid(site);
@@ -297,7 +297,7 @@ function create(): SimInstance {
           const site = tags.embryo.current;
           const grew = site !== null && lg.occ[site] && lg.cid[site] >= 0 && clusters[lg.cid[site]].size >= threshold;
           tags.embryo.draw(ctx, 'embryo · a formation of power that may dissolve', '#cbd5e1', bounds,
-            grew ? 'embryo · passed the threshold for growth' : 'embryo · dissolved before the threshold', grew ? '#00aeef' : undefined);
+            grew ? 'embryo · passed the threshold for growth and is becoming a stock' : 'embryo · dissolved before reaching the threshold for growth', grew ? '#00aeef' : undefined);
         }
         if (warding && bands.list.length) {
           tags.band.update(
@@ -308,7 +308,7 @@ function create(): SimInstance {
               return { anchor: kk, x: at(bands!.list[kk].i)[0], y: at(bands!.list[kk].i)[1] };
             },
           );
-          tags.band.draw(ctx, mobilization > 0.05 ? 'WARDING OFF · band, mobilized, wearing it down' : 'WARDING OFF · band, blocking growth', '#e0a800', bounds);
+          tags.band.draw(ctx, mobilization > 0.05 ? 'WARDING OFF · band, mobilized, wearing down the stock' : 'WARDING OFF · band, blocking growth', '#e0a800', bounds);
         }
         if (smithing && smiths.list.length) {
           tags.smith.update(
@@ -354,7 +354,7 @@ export const metallurgic: ModelDef = {
   stillFrames: 450,
   frameEvery: 2,
   describe: (mode) =>
-    `Metallurgic simulation: a solution fed with matter on a square lattice, in ${mode} mode. Gray clusters form and dissolve, cyan grains are crystal past the threshold, small yellow dots are bands that ward off, and magenta trails are smiths.`,
+    `Metallurgic simulation: a solution fed with matter on a square lattice, in ${mode} mode. Gray clusters form and dissolve, cyan grains are crystal past the threshold, small yellow dots are bands that ward off the stock, and magenta trails are smiths.`,
   controls: [
     { kind: 'slider', key: 'supersaturation', label: 'Starting Supersaturation Δμ', min: 0.04, max: 0.3, step: 0.01, default: 0.12, tint: 'cyan', format: 'dec2', reinit: true },
     { kind: 'slider', key: 'temperature', label: 'Temperature T', min: 0.3, max: 0.5, step: 0.01, default: 0.38, tint: 'cyan', format: 'dec2' },
@@ -374,16 +374,16 @@ export const metallurgic: ModelDef = {
     ['Bands', String(p.bands)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / Capture', text: 'Nucleation. Clusters form and dissolve until one crosses the threshold and grows into cyan grains, drawing down the solution that feeds it. Plateaus speaks of an apparatus “crystallizing” (357).' },
-    { process: 'warMachine', heading: '02 / War machine', text: 'Smiths. Magenta trails follow the grain boundaries and carve holes through the solid, returning matter to the flow. Smiths are itinerants who “follow the matter-flow” (Plateaus: 412) and make holey space (413-15).' },
-    { process: 'wardingOff', heading: '03 / Warding off', text: 'Bands. Many small agents settle on clusters and block their growth, and as the stock grows they mobilize and wear it down, since “depletion is the means by which primitive groups ward off the stock” (Plateaus: 440).' },
+    { process: 'capture', heading: '01 / Capture', text: 'Nucleation: clusters form and dissolve until one crosses the threshold and grows into cyan grains, drawing down the solution that feeds it. Plateaus speaks of an apparatus “crystallizing” (357).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Smiths: magenta trails follow the grain boundaries and carve holes through the solid, returning matter to the flow. Smiths are itinerants who “follow the matter-flow” (Plateaus: 412) and make holey space (413-15).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Bands: many small agents settle on clusters and block their growth, and as the stock grows they mobilize and wear down the stock, since “depletion is the means by which primitive groups ward off the stock” (Plateaus: 440).' },
   ],
   legend: [
     { swatch: '#64748b', see: 'Gray clusters', social: 'a nascent hierarchy, prestige that might harden into power', physics: 'nuclei below the critical size, which mostly dissolve', atp: 'formations of power kept from “taking on consistency” (Plateaus: 433)', example: 'Clastres’s chiefs, who speak but cannot command' },
     { swatch: '#00aeef', see: 'Cyan grains', social: 'a State’s stock: the granary, the treasury, the land register', physics: 'crystal past the threshold, growing from the solution', atp: 'capture: the stock, an apparatus crystallizing (Plateaus: 357, 440)', example: 'the granary or the land register' },
-    { swatch: '#b8860b', see: 'Yellow dots of varied sizes', social: 'primitive groups warding off the stock: dispersal, sharing, using up the surplus', physics: 'inhibitors that bind to surfaces and block growth (as antifreeze proteins do in ice)', atp: 'warding off by depletion, objects “destroyed or depleted rather than stockpiled” (Plateaus: 440)', example: 'Plateaus’ seeds for axes, an exchange that stops at “the last” before a stock forms (437-40)' },
+    { swatch: '#b8860b', see: 'Yellow dots of varied sizes', social: 'primitive groups warding off the stock: dispersal, sharing, using up the surplus', physics: 'inhibitors that bind to surfaces and block growth (as antifreeze proteins do in ice)', atp: 'warding off by depletion, objects “destroyed or depleted rather than stockpiled” (Plateaus: 440)', example: 'the exchange of seeds for axes in Plateaus, an exchange that stops at “the last” before a stock forms (437-40)' },
     { swatch: '#ec008c', see: 'Magenta trails', social: 'itinerant smiths and artisans, carrying know-how across societies', physics: 'walkers on grain boundaries that melt atoms back into solution', atp: 'the smith, who follows the matter-flow and makes holey space (Plateaus: 412-15)', example: 'a 1769 militia map of a Brazilian runaway settlement, with smithies and “holes for escape” (Carney and Rosomoff)' },
-    { swatch: '#f2f2f2', see: 'White line (chart)', social: 'surplus pressing to be stocked', physics: 'supersaturation Δμ, raised by the feed and lowered by growth', atp: 'the matter-flow that capture draws on' },
+    { swatch: '#f2f2f2', see: 'White line (chart)', social: 'surplus pressing to be stocked', physics: 'supersaturation Δμ, raised by the feed and lowered by growth', atp: 'the matter-flow that feeds capture' },
   ],
   create,
 };
