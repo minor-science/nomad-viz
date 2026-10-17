@@ -146,11 +146,11 @@ function create(): SimInstance {
 export const acoustic: ModelDef = {
   id: 'acoustic',
   name: 'Acoustic',
-  tagline: 'Resonant Frequency',
+  tagline: 'Resonance',
   sidebarIcon: Waves,
   headerIcon: Waves,
   title: 'Acoustic Metaphysics',
-  subtitle: 'Resonant Frequency // Cymatics',
+  subtitle: 'Resonance // Chladni Plate',
   describe: (mode) => `Acoustic Metaphysics Simulation: A resonant visualization showing ${mode} sound waves.`,
   controls: [
     { kind: 'slider', key: 'particleCount', label: 'Dust Density', min: 500, max: 3000, step: 100, default: 1800, tint: 'magenta', format: 'int', reinit: true },
@@ -166,9 +166,9 @@ export const acoustic: ModelDef = {
     ['Dust', String(p.particleCount)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / State', text: 'Despotic Resonance: The State imposes a single frequency. Matter is forced into rigid nodes, creating a geometric striation.' },
-    { process: 'warMachine', heading: '02 / Nomad', text: "Transversal Rhythms: The Nomad operates in the vibrating zones between nodes, refusing to settle into the State's geometric order." },
-    { process: 'wardingOff', heading: '03 / Non-State', text: 'The Great Refusal: Mechanisms of "silence" that actively ward off the State\'s resonance through destructive interference and white noise.' },
+    { process: 'capture', heading: '01 / Capture', text: 'Resonance. Dust settles on the still lines of a plate ringing in one mode. ATP: each State is “a redundancy of resonance (not of frequency)” (433).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Crossing. Dust moves across the still lines instead of settling on them. ATP, after Boulez: “in a smooth space-time one occupies without counting” (477).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Silence zones. Dust inside them ignores the plate. These zones are random agitation, not real interference (see Sources).' },
   ],
   create,
 };

@@ -154,11 +154,11 @@ function create(): SimInstance {
 export const metallurgic: ModelDef = {
   id: 'metallurgic',
   name: 'Metallurgic',
-  tagline: 'Thermodynamic Flow',
+  tagline: 'Crystallization',
   sidebarIcon: Anvil,
   headerIcon: Zap,
   title: 'Metallurgic Metaphysics',
-  subtitle: 'Thermodynamic Flow // Superfluidity',
+  subtitle: 'Crystallization // Matter-Flow',
   describe: (mode) => `Metallurgic Metaphysics Simulation: An atomic visualization showing ${mode} crystallization and nomad fluidity.`,
   controls: [
     { kind: 'slider', key: 'particleCount', label: 'Atomic Density', min: 200, max: 2000, step: 100, default: 1200, tint: 'magenta', format: 'int', reinit: true },
@@ -174,9 +174,9 @@ export const metallurgic: ModelDef = {
     ['Atoms', String(p.particleCount)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / State', text: 'Crystallization: Striated space as a rigid lattice. Particles are frozen into fixed positions, becoming part of an extensive order.' },
-    { process: 'warMachine', heading: '02 / Nomad', text: 'Superfluidity: The War Machine as a flow with zero viscosity. It deterritorializes the crystal, releasing matter back into smooth space.' },
-    { process: 'wardingOff', heading: '03 / Non-State', text: 'Inhibitors: Social mechanisms of "anti-freeze" that actively prevent crystallization from starting, warding off the State.' },
+    { process: 'capture', heading: '01 / Capture', text: 'Lattice. Atoms are pulled onto a fixed grid. ATP speaks of an apparatus “crystallizing” (357), though a grid laid down in advance is closer to a mold (see Sources).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Flow. Atoms follow a swirling field instead of settling. ATP’s metallurgist is one who follows “a flow of matter” (409).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Inhibitors. Zones agitate atoms so that no lattice forms there, as mechanisms “which make its crystallization impossible” (429).' },
   ],
   create,
 };

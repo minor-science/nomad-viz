@@ -211,11 +211,11 @@ function create(): SimInstance {
 export const cosmic: ModelDef = {
   id: 'cosmic',
   name: 'Cosmic',
-  tagline: 'Orbital Capture',
+  tagline: 'Gravity',
   sidebarIcon: Orbit,
   headerIcon: Magnet,
   title: 'Cosmic Metaphysics',
-  subtitle: 'Orbital Capture // Chaotic Takeover',
+  subtitle: 'Gravity // Orbits',
   badge: 'Orbital',
   describe: (mode) => `Cosmic Metaphysics Simulation: An orbital visualization showing ${mode} captures and chaotic transversal flows.`,
   controls: [
@@ -235,9 +235,9 @@ export const cosmic: ModelDef = {
     ['Particles', String(p.particleCount)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / State', text: 'Orbital Capture: The State as a centripetal gravity. It captures celestial bodies into predictable, metric orbits, striating space into concentric circular shells.' },
-    { process: 'warMachine', heading: '02 / Nomad', text: 'Chaotic Takeover: The Nomad as a stochastic vector. It deterritorializes orbits through sudden, transversal shifts that can seize any body at any moment.' },
-    { process: 'wardingOff', heading: '03 / Non-State', text: 'Explosive Voids: Social mechanisms of warding that create violent centrifugal repulsion, capable of shattering stable orbits and ejecting captured matter.' },
+    { process: 'capture', heading: '01 / Capture', text: 'Gravity. Bodies are pulled into rings around a center. ATP: universal attraction became royal science’s “law of all laws” (370).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Escape. Bodies are kicked off their rings. ATP’s figure here is the swerve, “the minimum angle, which deviates from the vertical” (489).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Voids. Zones push bodies outward so that no ring can form there.' },
   ],
   create,
 };

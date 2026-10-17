@@ -8,6 +8,17 @@ export function readModel(): string | null {
   return new URLSearchParams(window.location.search).get('model');
 }
 
+export function readPanel(): string | null {
+  return new URLSearchParams(window.location.search).get('panel');
+}
+
+export function setPanel(panel: string | null) {
+  const q = new URLSearchParams(window.location.search);
+  if (panel) q.set('panel', panel);
+  else q.delete('panel');
+  window.history.replaceState(null, '', `${window.location.pathname}?${q.toString()}${window.location.hash}`);
+}
+
 export function readMode(): Mode | null {
   const m = new URLSearchParams(window.location.search).get('mode');
   return MODES.includes(m as Mode) ? (m as Mode) : null;
@@ -32,9 +43,11 @@ export function writeState(model: string, mode: Mode, params: Params, base: Para
   const q = new URLSearchParams();
   q.set('model', model);
   if (mode !== 'state') q.set('mode', mode);
+  const panel = readPanel();
   for (const [k, v] of Object.entries(params)) {
     if (base[k] !== v) q.set(k, String(v));
   }
+  if (panel) q.set('panel', panel);
   const url = `${window.location.pathname}?${q.toString()}${window.location.hash}`;
   window.history.replaceState(null, '', url);
 }

@@ -219,7 +219,7 @@ export const hydraulic: ModelDef = {
   sidebarIcon: Droplets,
   headerIcon: Droplets,
   title: 'Hydraulic Metaphysics',
-  subtitle: 'Fluid Dynamics // Flow',
+  subtitle: 'Laminar Flow // Turbulence',
   describe: (mode) => `Hydraulic Metaphysics Simulation: A fluid dynamic visualization showing ${mode} interactions.`,
   controls: [
     { kind: 'slider', key: 'particleCount', label: 'Flow Density', min: 200, max: 2000, step: 100, default: 1200, tint: 'magenta', format: 'int', reinit: true },
@@ -235,9 +235,9 @@ export const hydraulic: ModelDef = {
     ['Particles', String(p.particleCount)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / State', text: 'Laminar Flow: The State striates the current, forcing all particles into parallel lines. Friction at the boundaries creates the shear necessary for deterritorialization.' },
-    { process: 'warMachine', heading: '02 / Nomad', text: "Dynamic Vortices: Singularities that emerge from boundary friction and obstacle wakes. They travel through the flow, actively disrupting the State's striation." },
-    { process: 'wardingOff', heading: '03 / Non-State', text: 'Warding Obstacles: Social mechanisms that break the flow and shed vortices. They act as "stones in the river" that generate the Nomad\'s turbulent smooth space.' },
+    { process: 'capture', heading: '01 / Capture', text: 'Laminar flow. Particles run in parallel layers, slower near the edges, as in a channel. ATP: the State needs “conduits, pipes, embankments, which prevent turbulence” (363).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Vortices. Eddies carry particles across the layers. ATP: nomad science is “distributed by turbulence across a smooth space” (363).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Obstacles. Moving zones agitate the particles that enter them. In conflict mode they also shed vortices, which ATP would count as the war machine, not warding off (see Sources).' },
   ],
   create,
 };

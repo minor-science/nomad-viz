@@ -12,6 +12,15 @@ import ModelShell from './components/ModelShell';
 import { MODELS, MODEL, isModelId } from './models';
 import { readModel } from './sim/url';
 import type { ModelId } from './sim/types';
+import { PROCESS, type ProcessId } from './processes';
+import { BIBLIOGRAPHY } from './content/bibliography';
+
+// The processes staged so far, in the charts' order (Axiom I, 351). Quotations are checked by scripts/check-atp.ts.
+const FRAMEWORK: { id: ProcessId; text: string }[] = [
+  { id: 'wardingOff', text: 'Primitive societies. Mechanisms that keep an apparatus “from crystallizing” (357, cf. Clastres).' },
+  { id: 'warMachine', text: 'Nomads. A movement “distributed by turbulence across a smooth space” (363).' },
+  { id: 'capture', text: 'States. Striating space “so as to render it homogeneous” (370).' },
+];
 
 const ACTIVE_ICON: Record<ModelId, string> = {
   hydraulic: 'text-xerox-cyan',
@@ -134,27 +143,20 @@ export default function App() {
 
           <section className="space-y-2 p-3 bg-xerox-ink text-xerox-bg border-2 border-xerox-ink brutal-shadow">
             <h2 className={`font-black uppercase tracking-[0.2em] border-b border-xerox-bg/30 pb-0.5 ${highVisibility ? 'text-xs' : 'text-[10px]'}`}>
-              Conceptual Framework
+              Processes
             </h2>
             <div className="space-y-2">
-              <div className="space-y-0.5" role="article">
-                <span className={`font-black uppercase text-xerox-cyan tracking-widest ${highVisibility ? 'text-sm' : 'text-xs'}`}>01 / The State</span>
-                <p className={`${highVisibility ? 'text-sm' : 'text-[11px]'} leading-tight font-medium ${highVisibility ? 'normal-case' : ''}`}>
-                  Apparatus of Capture. Striation of space. Imposition of metric, laminar, and resonant order.
-                </p>
-              </div>
-              <div className="space-y-0.5" role="article">
-                <span className={`font-black uppercase text-xerox-magenta tracking-widest ${highVisibility ? 'text-sm' : 'text-xs'}`}>02 / The Nomad</span>
-                <p className={`${highVisibility ? 'text-sm' : 'text-[11px]'} leading-tight font-medium ${highVisibility ? 'normal-case' : ''}`}>
-                  The War Machine. Deterritorialization. Creation of smooth space through turbulence and transversal movement.
-                </p>
-              </div>
-              <div className="space-y-0.5" role="article">
-                <span className={`font-black uppercase text-xerox-yellow tracking-widest ${highVisibility ? 'text-sm' : 'text-xs'}`}>03 / Non-State</span>
-                <p className={`${highVisibility ? 'text-sm' : 'text-[11px]'} leading-tight font-medium ${highVisibility ? 'normal-case' : ''}`}>
-                  Anticipation & Warding. Mechanisms that prevent State formation before it can crystallize.
-                </p>
-              </div>
+              {FRAMEWORK.map((f, i) => (
+                <div key={f.id} className="space-y-0.5" role="article">
+                  <span className={`font-black uppercase tracking-widest ${highVisibility ? 'text-sm' : 'text-xs'}`} style={{ color: PROCESS[f.id].color }}>
+                    0{i + 1} / {PROCESS[f.id].name}
+                  </span>
+                  <p className={`${highVisibility ? 'text-sm' : 'text-[11px]'} leading-tight font-medium`}>{f.text}</p>
+                </div>
+              ))}
+              <p className={`${highVisibility ? 'text-xs' : 'text-[10px]'} leading-tight opacity-70 pt-1 border-t border-xerox-bg/30`}>
+                Polarization (towns) and encompassment (ecumenical organizations) are not modeled yet.
+              </p>
             </div>
           </section>
 
@@ -202,7 +204,7 @@ export default function App() {
 
         {/* Fixed Footer in Sidebar */}
         <footer className="shrink-0 p-4 border-t-4 border-xerox-ink bg-xerox-bg text-[9px] font-bold uppercase tracking-tighter opacity-50">
-          Deleuze & Guattari // Nomadology: The War Machine
+          Deleuze & Guattari // A Thousand Plateaus, plateaus 12-13
         </footer>
       </aside>
 
@@ -266,31 +268,35 @@ export default function App() {
               <div className="space-y-6 text-sm font-bold leading-tight uppercase overflow-y-auto max-h-[60vh] pr-2">
                 <section className="space-y-4">
                   <p className="border-l-4 border-xerox-ink pl-4">
-                    This project visualizes the philosophical concepts of Gilles Deleuze and Félix Guattari from their work "A Thousand Plateaus" (1980).
+                    In A Thousand Plateaus (1980), Deleuze and Guattari “define social formations by machinic processes and not by modes of production” (435). They describe several of those processes in physical terms, as laminar and turbulent flow, crystallization, resonance, and the fall of bodies.
                   </p>
                   <p>
-                    The models explore the tension between the State Apparatus (Capture/Striation) and the Nomad War Machine (Deterritorialization/Smooth Space).
+                    Each model here runs one of those descriptions as a simulation. The Sources button in every model separates what A Thousand Plateaus says, what it borrows, what the physics says, and where they part ways.
                   </p>
                   <p className="bg-xerox-ink text-xerox-bg p-4">
-                    We also include the Non-State perspective: social mechanisms that actively ward off the formation of a State through counter-rhythms.
+                    These are early versions. Their Sources panels say plainly where a model departs from the book or from physics. A rebuild is under way.
                   </p>
                 </section>
 
-                <section className="space-y-4 border-t-2 border-xerox-ink pt-6">
-                  <h3 className="text-lg font-black tracking-tight">Technical Implementation</h3>
-                  <p className="text-[11px]">
-                    The simulation is built using a custom physics engine running on HTML5 Canvas 2D. 
-                    While it mimics the look of high-end shaders, we chose a readable TypeScript/Canvas implementation 
-                    to ensure the code is accessible for learning and modification.
-                  </p>
-                  <p className="text-[11px]">
-                    Each model uses a state-driven loop (requestAnimationFrame) to update particle vectors based on 
-                    force-fields (Striation) and singularities (Vortices).
+                <section className="space-y-3 border-t-2 border-xerox-ink pt-6">
+                  <h3 className="text-lg font-black tracking-tight">Works cited</h3>
+                  <ul className="space-y-1.5 text-[11px] font-medium normal-case leading-snug">
+                    {Object.values(BIBLIOGRAPHY)
+                      .sort((x, y) => x.cite.localeCompare(y.cite))
+                      .map((w) => (
+                        <li key={w.cite}>
+                          {w.cite}
+                          {w.atp && <span className="opacity-70"> Cited in ATP {w.atp}.</span>}
+                        </li>
+                      ))}
+                  </ul>
+                  <p className="text-[10px] normal-case font-medium opacity-70">
+                    Page numbers without a prefix refer to the Minnesota translation of A Thousand Plateaus (1987). Code: Apache License 2.0. Text: CC BY 4.0. Built with React and HTML canvas.
                   </p>
                 </section>
 
-                <div className="pt-6 border-t-2 border-xerox-ink opacity-50 text-[10px]">
-                  "The State is a process of capture... The Nomad is a vector of deterritorialization."
+                <div className="pt-6 border-t-2 border-xerox-ink opacity-60 text-[10px] normal-case">
+                  “Smooth space is constituted by the minimum angle, which deviates from the vertical, and by the vortex, which overspills striation” (489).
                 </div>
               </div>
             </motion.div>

@@ -5,17 +5,17 @@ import {
   WORLD_SCALE, defaults, formatValue,
   type ControlSpec, type Mode, type ModelDef, type Params, type Tint,
 } from '../sim/types';
-import { readMode, readParams, writeState } from '../sim/url';
+import { readMode, readPanel, readParams, setPanel, writeState } from '../sim/url';
 
-const TheoryPanel = lazy(() => import('./TheoryPanel'));
+const SourcesPanel = lazy(() => import('./SourcesPanel'));
 
 // Under reduced motion the shell shows a still: this many frames are computed off screen.
 const STILL_FRAMES = 150;
 
 const MODE_BUTTONS: { mode: Mode; label: string; on: string; hover: string }[] = [
-  { mode: 'state', label: 'State', on: 'bg-xerox-cyan text-xerox-ink', hover: 'hover:bg-xerox-cyan' },
-  { mode: 'nomad', label: 'Nomad', on: 'bg-xerox-magenta text-xerox-bg', hover: 'hover:bg-xerox-magenta hover:text-xerox-bg' },
-  { mode: 'nonstate', label: 'Non-State', on: 'bg-xerox-yellow text-xerox-ink', hover: 'hover:bg-xerox-yellow' },
+  { mode: 'state', label: 'Capture', on: 'bg-xerox-cyan text-xerox-ink', hover: 'hover:bg-xerox-cyan' },
+  { mode: 'nomad', label: 'War machine', on: 'bg-xerox-magenta text-xerox-bg', hover: 'hover:bg-xerox-magenta hover:text-xerox-bg' },
+  { mode: 'nonstate', label: 'Warding off', on: 'bg-xerox-yellow text-xerox-ink', hover: 'hover:bg-xerox-yellow' },
   { mode: 'conflict', label: 'Conflict', on: 'bg-xerox-accent text-xerox-bg', hover: 'hover:bg-xerox-accent hover:text-xerox-bg' },
 ];
 
@@ -39,8 +39,8 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   const [params, setParams] = useState<Params>(() => readParams(model.controls, base));
   const [isPlaying, setIsPlaying] = useState(!isReducedMotion);
   const [showControls, setShowControls] = useState(() => window.matchMedia('(min-width: 768px)').matches);
-  const [showTheory, setShowTheory] = useState(false);
-  const [theoryLoaded, setTheoryLoaded] = useState(false);
+  const [showTheory, setShowTheory] = useState(() => readPanel() === 'sources');
+  const [theoryLoaded, setTheoryLoaded] = useState(() => readPanel() === 'sources');
   const uid = useId();
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -149,7 +149,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   }, [model.id, mode, params, base]);
 
   useEffect(() => {
-    onAnnounce?.(`${model.name} Model switched to ${mode} mode`);
+    onAnnounce?.(`${model.name} model switched to ${MODE_BUTTONS.find((b) => b.mode === mode)?.label} mode`);
   }, [mode, model.name, onAnnounce]);
 
   const set = (key: string, value: number) => setParams((p) => ({ ...p, [key]: value }));
@@ -244,10 +244,11 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
             onClick={() => {
               setTheoryLoaded(true);
               setShowTheory(true);
-              onAnnounce?.('Opened technical manual');
+              setPanel('sources');
+              onAnnounce?.('Opened sources');
             }}
             className="p-2 border-2 border-xerox-ink hover:bg-xerox-ink hover:text-xerox-bg transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center bg-xerox-bg text-xerox-ink"
-            aria-label="View Technical Equations"
+            aria-label="View sources" title="Sources"
           >
             <Info className="w-5 h-5" />
           </button>
@@ -328,7 +329,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
         <div className="hidden md:grid grid-cols-3 gap-4">{cards}</div>
         <div className="md:hidden space-y-2">
           <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 items-center text-[8px] font-black uppercase tracking-widest opacity-60">
-            <span>Mode: {mode}</span>
+            <span>Mode: {MODE_BUTTONS.find((b) => b.mode === mode)?.label}</span>
             {model.status(params).map(([k, v]) => (
               <span key={k}>{k}: {v}</span>
             ))}
@@ -342,7 +343,10 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
 
       {theoryLoaded && (
         <Suspense fallback={null}>
-          <TheoryPanel modelType={model.id} isOpen={showTheory} onClose={() => setShowTheory(false)} isHighVis={isHighVis} />
+          <SourcesPanel modelType={model.id} isOpen={showTheory} onClose={() => {
+            setShowTheory(false);
+            setPanel(null);
+          }} isHighVis={isHighVis} />
         </Suspense>
       )}
     </div>
