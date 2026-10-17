@@ -57,6 +57,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const legendRef = useRef<HTMLDivElement>(null);
   const sim = useRef(model.create()).current;
   const live = useRef({ mode, params, motionScale: isReducedMotion ? 0.2 : 1, explain: true });
   const world = useRef({ width: 0, height: 0, time: 0, ready: false });
@@ -70,7 +71,16 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
     const w = world.current;
     if (!ctx || !w.ready) return;
     w.time += 1 / 60;
-    sim.frame(ctx, { width: w.width, height: w.height, time: w.time, mode: live.current.mode, params: live.current.params, motionScale, explain: live.current.explain });
+    // Tags keep clear of the legend, wherever it sits over the canvas.
+    const keepClear: { x: number; y: number; w: number; h: number }[] = [];
+    const lg = legendRef.current;
+    const wrap = wrapRef.current;
+    if (lg && wrap && lg.offsetParent) {
+      const a = lg.getBoundingClientRect();
+      const b = wrap.getBoundingClientRect();
+      keepClear.push({ x: (a.left - b.left) * WORLD_SCALE, y: (a.top - b.top) * WORLD_SCALE, w: a.width * WORLD_SCALE, h: a.height * WORLD_SCALE });
+    }
+    sim.frame(ctx, { width: w.width, height: w.height, time: w.time, mode: live.current.mode, params: live.current.params, motionScale, explain: live.current.explain, keepClear });
   };
 
   const renderStill = () => {
@@ -353,7 +363,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
         <div ref={wrapRef} className="flex-1 relative overflow-hidden" role="img" aria-label={model.describe(mode)}>
           <canvas ref={canvasRef} className={`absolute inset-0 w-full h-full ${isHighVis ? '' : 'xerox-effect'}`} />
           {showLegend && model.legend && (
-            <div className="hidden md:block absolute left-2 bottom-2 max-w-[580px] bg-black/80 text-xerox-bg border-2 border-xerox-bg/40 p-2 space-y-1" aria-label="Legend">
+            <div ref={legendRef} className="hidden md:block absolute left-2 bottom-2 max-w-[580px] bg-black/80 text-xerox-bg border-2 border-xerox-bg/40 p-2 space-y-1" aria-label="Legend">
               {model.legend.map((r) => (
                 <div key={r.see} className="flex gap-2 items-baseline text-[10px] leading-snug font-sans">
                   <span className="inline-block w-2.5 h-2.5 shrink-0 translate-y-0.5" style={{ background: r.swatch }} aria-hidden="true" />

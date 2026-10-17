@@ -13,8 +13,9 @@ const PROCESS_COLOR: Record<string, string> = {
   POLARIZATION: '#2f8f4e',
 };
 
-export function beginTags() {
-  placed = [];
+/** Start a frame's tags; `clear` lists areas (such as the legend) that tags should avoid. */
+export function beginTags(clear: { x: number; y: number; w: number; h: number }[] = []) {
+  placed = [...clear];
   shown = new Set();
 }
 
@@ -56,9 +57,10 @@ export function drawTag(
   // Candidate spots: right or left of the feature (side 0, 1), above or below it (vert 0, 1),
   // pushed down by whole rows to clear other tags. The first spot that fits wins, but a tag that
   // already has a spot keeps it while it still fits, so it does not flip back and forth.
+  // Rows run away from the feature: upward from a spot above it, downward from a spot below it.
   const rect = (side: number, vert: number, row: number) => ({
     x: side === 0 ? x + 28 : x - 28 - w,
-    y: (vert === 0 ? y - 46 : y + 22) + row * (h + 8),
+    y: vert === 0 ? y - 46 - row * (h + 8) : y + 22 + row * (h + 8),
     w,
     h,
   });

@@ -1,209 +1,352 @@
 import { Magnet, Orbit } from 'lucide-react';
-import type { ModelDef, SimInstance, Frame } from '../sim/types';
+import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
+import { Orbits, HELD, SOCIETY, COMPANY, ARMY, type OrbitParams } from '../sim/orbits';
+import { Wobble } from '../sim/heating';
+import { beginTags, drawTag, StickyTag } from '../sim/tags';
 
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  isCaptured: boolean;
-  intensity: number;
-  trail: { x: number; y: number }[];
-  sizeMult: number;
-  speedMult: number;
-}
+// Nomadology in a world where everything is gravity. Underneath is Newtonian gravity around a
+// heavy center. The capital is there from the start, a central mass whose closed orbits are its
+// order. Societies are small clusters held together by their own gravity, each with its own
+// orbits, its own code. A heavy center's tides strip a society that comes too close, and its
+// members end up circling the capital (overcoding); the tidal radius is the threshold, and a
+// society warned by its tide cools and tightens to keep that threshold outside it (warding off).
+// The capital's own crowd slows societies so that they sink toward it (dynamical friction), and
+// the more it holds the faster they sink. Companies are heavy units on open paths: one that tears
+// through the capital flings its bodies out (war on the State), but the crowd's pull slows it, and
+// it may be caught in orbit as the capital's army (appropriation). The three are not rivals for
+// one prize: each has its own movement, its own purpose, and a one-way relation to the others.
+
+const W = 160;
+const H = 100;
+const SPAN = 600;
+const PHASE_HOLD = 180;
+
+const CYAN = '#00aeef';
+const MAGENTA = '#ec008c';
+const YELLOW = '#e0a800';
+const GRAY = '#64748b';
+const INK = '#f2f2f2';
+
+type Caption = { head: string; sub: string; color: string };
+type Event = 'stripped' | 'scatter' | 'caught' | 'absorbed' | 'formed' | 'tighten';
+
+// The narrator reports events, since the three relate to one another in different ways.
+const EVENTS: Record<Event, Caption> = {
+  stripped: {
+    head: 'CAPTURE · OVERCODING · The capital city’s crowd slows a society until it sinks within reach of the tides, which strip its members into the capital city’s orbits. The society no longer runs on its own code (tidal stripping).',
+    sub: 'Capture “contributes to the creation of that which it captures” (Plateaus: 448).',
+    color: CYAN,
+  },
+  scatter: {
+    head: 'WAR MACHINE · WAR ON THE STATE · A company tears through the capital city, and the bodies held in its orbits are flung out across the field (a gravitational fly-by).',
+    sub: 'The war machine finds war as its object “in opposition to the State-form, the destruction of which is at issue” (Plateaus: 420).',
+    color: MAGENTA,
+  },
+  caught: {
+    head: 'CAPTURE · APPROPRIATION · The capital city’s crowd drags on a company until it is caught in orbit: still fast, but now circling the capital city as its army (dynamical friction).',
+    sub: '“What we call a military institution, or army, is not at all the war machine in itself, but the form under which it is appropriated by the State” (Plateaus: 418).',
+    color: CYAN,
+  },
+  absorbed: {
+    head: 'CAPTURE · THE ARMY · A caught company sinks into the capital city and no longer moves as a unit of its own (absorbed into the center).',
+    sub: '“Mercenary or territorial? A professional army or a conscripted army?” (Plateaus: 419).',
+    color: CYAN,
+  },
+  formed: {
+    head: 'WARDING OFF · A NEW SOCIETY · People scattered from the capital city regroup at a distance into a society of their own, with its own orbits (a bound cluster forms).',
+    sub: 'Centers “do not converge in the same black hole” (Plateaus: 211).',
+    color: YELLOW,
+  },
+  tighten: {
+    head: 'WARDING OFF · ANTICIPATION · As the capital city’s reach grows, threatened societies tighten their own orbits, so that the threshold stays outside them (cooling inside the tidal radius).',
+    sub: '“The threshold is in fact already there, but outside the limit, which is satisfied to place the threshold at a distance, keep it at a distance” (Plateaus: 440).',
+    color: YELLOW,
+  },
+};
+const HOLDING = {
+  capital: {
+    head: 'CAPTURE HOLDS · The capital city holds most of the field in its orbits, every movement made relative to it, from point to point (bound orbits).',
+    sub: 'The State is “a State that comes into the world fully formed and rises up in a single stroke, the unconditioned Urstaat” (Plateaus: 427).',
+    color: CYAN,
+  },
+  societies: {
+    head: 'WARDING OFF HOLDS · Societies circle at a distance, each running on its own code, none drawn into the capital city (bound clusters beyond their tidal radii).',
+    sub: 'Before it appears, the State acts as “the convergent or centripetal wave of the hunter-gatherers, a wave that cancels itself out precisely at the point of convergence” (Plateaus: 431).',
+    color: YELLOW,
+  },
+  companies: {
+    head: 'WAR MACHINE HOLDS · Companies cross the open field on their own courses, outside every orbit (unbound paths).',
+    sub: '“Make the desert, the steppe, grow; do not depopulate it, quite the contrary” (Plateaus: 417).',
+    color: MAGENTA,
+  },
+} satisfies Record<string, Caption>;
+const MIXTURE: Caption = {
+  head: 'IN MIXTURE · The capital city holds its orbits, societies circle at a distance, companies cross the field.',
+  sub: 'Smooth and striated “exist only in mixture” (Plateaus: 474).',
+  color: '#cbd5e1',
+};
+const MODE_CAPTION: Partial<Record<Mode, Caption>> = {
+  state: {
+    head: 'CAPTURE ALONE · No companies and no societies tightening their ties: the capital city’s crowd draws society after society within reach of its tides and strips them into its orbits.',
+    sub: '“Gravity, gravitas, such is the essence of the State” (Plateaus: 386).',
+    color: CYAN,
+  },
+  nonstate: {
+    head: 'WARDING OFF ALONE · Societies tighten their own orbits whenever the capital city’s tide grows, so they circle near it without being stripped.',
+    sub: '“The threshold is in fact already there, but outside the limit, which is satisfied to place the threshold at a distance, keep it at a distance” (Plateaus: 440).',
+    color: YELLOW,
+  },
+  nomad: {
+    head: 'WAR MACHINE ALONE · Companies cross the field on open paths and tear through the capital city, while the crowd’s drag is too weak to catch them.',
+    sub: 'The war machine’s “sole and veritable positive object” is smooth space, “the occupation of this space, displacement within this space” (Plateaus: 417).',
+    color: MAGENTA,
+  },
+};
 
 function create(): SimInstance {
-  let particles: Particle[] = [];
+  let orbits: Orbits | null = null;
+  let trail: HTMLCanvasElement | null = null;
+  let narration: Narration | null = null;
+  let caption: Caption = MIXTURE;
+  let captionAge = PHASE_HOLD;
+  let acc = 0;
+  let due = 0;
+  const wobble = new Wobble();
+  let px = new Float32Array(0);
+  let py = new Float32Array(0);
+  let last = { societies: 0, absorbed: 0, caught: 0, held: 0, frame: 0 };
+  let heldTrend: number[] = [];
+  const history = { held: [] as number[], societies: [] as number[], companies: [] as number[], army: [] as number[] };
+  let societyFate: string | null = null;
+  const tags = {
+    capital: new StickyTag<number>(900),
+    society: new StickyTag<number>(400),
+    company: new StickyTag<number>(400),
+  };
+  let companyWas = COMPANY;
 
   return {
-    init(width, height, params) {
-      particles = Array.from({ length: params.particleCount }, () => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 1.5,
-        vy: (Math.random() - 0.5) * 1.5,
-        isCaptured: false,
-        intensity: Math.random(),
-        trail: [],
-        sizeMult: 0.4 + Math.random() * 2.5,
-        speedMult: 0.5 + Math.random() * 2.0,
-      }));
+    init(_w, _h, params) {
+      orbits = new Orbits(W, H);
+      orbits.companyMass = params.companyMass;
+      orbits.spawnNear = 0.26;
+      orbits.spawnFar = 0.38;
+      orbits.halo = 2;
+      for (let k = 0; k < 14; k++) orbits.addSociety(22 + 22 * Math.random(), Math.random() * 2 * Math.PI, params.capital);
+      for (const k of Object.keys(history) as (keyof typeof history)[]) history[k].length = 0;
+      heldTrend = [];
+      last = { societies: orbits.societies(), absorbed: 0, caught: 0, held: 0, frame: 0 };
     },
 
     frame(ctx, f: Frame) {
-      const { width, height, time, mode, motionScale } = f;
-      const {
-        intensity, wardingCount, wardingSize, stateCount, orbitalRadius,
-        gravitationalConstant: G, antiGravityStrength: antiG, nomadIntensity, nomadSize,
-      } = f.params;
+      if (!orbits) return;
+      const { mode, params, width, height, motionScale } = f;
+      const capital = params.capital;
+      let p: OrbitParams;
+      let rate = params.rate;
+      if (mode === 'state') {
+        p = { capital, friction: 0.05, sink: Math.max(params.sink, 20) * 1.5, cool: 0, alarm: 9 };
+        rate = 0;
+      } else if (mode === 'nonstate') {
+        p = { capital, friction: 0.05, sink: params.sink, cool: Math.max(params.cool, 0.6) * 1.5, alarm: Math.min(params.alarm, 0.4) };
+        rate = 0;
+      } else if (mode === 'nomad') {
+        p = { capital, friction: 0.01, sink: params.sink * 0.3, cool: params.cool, alarm: params.alarm };
+        rate = params.rate * 3;
+      } else p = { capital, friction: 0.05, sink: params.sink, cool: params.cool, alarm: params.alarm };
 
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.2)';
+      if (px.length !== orbits.cap) {
+        px = new Float32Array(orbits.cap);
+        py = new Float32Array(orbits.cap);
+      }
+      acc += params.speed * motionScale;
+      const steps = Math.floor(acc);
+      acc -= steps;
+      px.set(orbits.x);
+      py.set(orbits.y);
+      for (let k = 0; k < steps; k++) {
+        // Companies arrive in uneven surges, as the other models' forcings come.
+        due += rate * (mode === 'conflict' ? wobble.step(params.surge, 0.002) : 1);
+        if (due >= 1) {
+          due -= 1;
+          orbits.addCompany(1);
+        }
+        orbits.step(p);
+      }
+      const shares = orbits.classify(capital);
+      const co = orbits.companies();
+      const societies = orbits.societies();
+      history.held.push(shares.held);
+      history.societies.push(societies / 14);
+      history.companies.push(Math.min(1, (co.total - co.caught) / 4));
+      history.army.push(Math.min(1, orbits.absorbed / 30));
+      if (history.held.length > SPAN) for (const k of Object.keys(history) as (keyof typeof history)[]) history[k].shift();
+      heldTrend.push(shares.held);
+      if (heldTrend.length > 90) heldTrend.shift();
+
+      // Drawing: trails fade on their own layer, so orbits, knots, and courses show as paths.
+      const sx = width / W;
+      const sy = height / H;
+      const main = ctx;
+      if (!trail || trail.width !== main.canvas.width || trail.height !== main.canvas.height) {
+        trail = document.createElement('canvas');
+        trail.width = main.canvas.width;
+        trail.height = main.canvas.height;
+      }
+      const tctx = trail.getContext('2d')!;
+      tctx.setTransform(main.getTransform());
+      tctx.fillStyle = 'rgba(11, 18, 32, 0.08)';
+      tctx.fillRect(0, 0, width, height);
+      tctx.lineCap = 'round';
+      const colorOf = (i: number) =>
+        orbits!.kind[i] === HELD ? CYAN : orbits!.kind[i] === SOCIETY ? YELLOW : orbits!.kind[i] === COMPANY ? MAGENTA : orbits!.kind[i] === ARMY ? CYAN : GRAY;
+      for (let i = 0; i < orbits.n; i++) {
+        if (Math.abs(orbits.x[i] - px[i]) > 15 || Math.abs(orbits.y[i] - py[i]) > 15) continue;
+        tctx.strokeStyle = colorOf(i);
+        tctx.lineWidth = orbits.isCompany[i] ? 10 : 4;
+        tctx.beginPath();
+        tctx.moveTo(px[i] * sx, py[i] * sy);
+        tctx.lineTo(orbits.x[i] * sx, orbits.y[i] * sy);
+        tctx.stroke();
+      }
+      main.save();
+      main.setTransform(1, 0, 0, 1, 0, 0);
+      main.drawImage(trail, 0, 0);
+      main.restore();
+      // The capital: a glow whose size follows how much it holds.
+      const glow = ctx.createRadialGradient(orbits.cx * sx, orbits.cy * sy, 0, orbits.cx * sx, orbits.cy * sy, (6 + 14 * shares.held) * sx);
+      glow.addColorStop(0, 'rgba(0, 174, 239, 0.55)');
+      glow.addColorStop(1, 'rgba(0, 174, 239, 0)');
+      ctx.fillStyle = glow;
       ctx.fillRect(0, 0, width, height);
-
-      const minDim = Math.min(width, height);
-      const effectiveOrbitalRadius = Math.min(orbitalRadius, minDim * 0.45);
-      const effectiveWardingSize = Math.min(wardingSize, minDim * 0.15);
-      const showState = mode === 'state' || mode === 'conflict';
-
-      // State centers
-      const centers: { x: number; y: number }[] = [];
-      const orbitDist = effectiveOrbitalRadius * 0.4;
-      for (let i = 0; i < stateCount; i++) {
-        const angle = (i / stateCount) * Math.PI * 2 + time * 0.2;
-        const spread = stateCount > 1 ? 1 : 0;
-        centers.push({
-          x: width / 2 + Math.cos(angle) * orbitDist * spread,
-          y: height / 2 + Math.sin(angle) * orbitDist * spread,
-        });
-      }
-
-      if (showState) {
-        // Orbital paths (striated space)
-        ctx.strokeStyle = 'rgba(51, 65, 85, 0.15)';
-        ctx.lineWidth = 1;
-        centers.forEach((c) => {
-          for (let r = 50; r <= effectiveOrbitalRadius; r += 50) {
-            ctx.beginPath();
-            ctx.arc(c.x, c.y, r, 0, Math.PI * 2);
-            ctx.stroke();
-          }
-        });
-        // Central gravity
-        centers.forEach((c, i) => {
-          const pulse = Math.sin(time * 2 + i) * 5;
-          const gradient = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 30 + pulse);
-          gradient.addColorStop(0, 'rgba(0, 174, 239, 0.4)');
-          gradient.addColorStop(1, 'rgba(0, 174, 239, 0)');
-          ctx.fillStyle = gradient;
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, 30 + pulse, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#00aeef';
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, 6, 0, Math.PI * 2);
-          ctx.fill();
-        });
-      }
-
-      // Warding zones
-      const zones: { x: number; y: number; r: number }[] = [];
-      if (mode === 'nonstate' || mode === 'conflict') {
-        const count = mode === 'conflict' ? Math.ceil(wardingCount / 2) : wardingCount;
-        for (let i = 0; i < count; i++) {
-          const wx = (Math.cos(time * 0.5 + i * 1.5) * 0.4 + 0.5) * width;
-          const wy = (Math.sin(time * 0.4 + i * 2.2) * 0.4 + 0.5) * height;
-          const r = effectiveWardingSize * (0.8 + Math.sin(time + i) * 0.2);
-          zones.push({ x: wx, y: wy, r });
-          ctx.strokeStyle = 'rgba(184, 134, 11, 0.3)';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.arc(wx, wy, r + Math.sin(time * 5 + i) * 5, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-      }
-
-      particles.forEach((p, i) => {
-        let forceX = 0;
-        let forceY = 0;
-
-        // 1. Warding off (anti-gravity voids)
-        let isWarded = false;
-        zones.forEach((z) => {
-          const rdx = p.x - z.x;
-          const rdy = p.y - z.y;
-          const rd = Math.sqrt(rdx * rdx + rdy * rdy);
-          if (rd < z.r) {
-            isWarded = true;
-            const push = (1 - rd / z.r) * antiG * intensity * 12 * motionScale;
-            forceX += (rdx / rd) * push;
-            forceY += (rdy / rd) * push;
-            forceX += (Math.random() - 0.5) * 3 * motionScale;
-            forceY += (Math.random() - 0.5) * 3 * motionScale;
-          }
-        });
-
-        // 2. State capture (orbital shells)
-        let captured = false;
-        if (!isWarded && showState) {
-          centers.forEach((c) => {
-            const dxC = c.x - p.x;
-            const dyC = c.y - p.y;
-            const distC = Math.sqrt(dxC * dxC + dyC * dyC);
-            if (distC < effectiveOrbitalRadius + 150) {
-              const pull = (G * 5000) / (distC * distC + 1000);
-              forceX += (dxC / distC) * pull * intensity * motionScale;
-              forceY += (dyC / distC) * pull * intensity * motionScale;
-
-              const angleToCenter = Math.atan2(dyC, dxC);
-              const orbitalVel = Math.sqrt((G * 2000) / distC) * intensity;
-              const targetVx = Math.sin(angleToCenter) * orbitalVel;
-              const targetVy = -Math.cos(angleToCenter) * orbitalVel;
-
-              const shellSpacing = 50;
-              const targetRadius = Math.round(distC / shellSpacing) * shellSpacing;
-              const radialForce = (targetRadius - distC) * 0.1 * intensity;
-
-              forceX += ((targetVx - p.vx) * 0.08 + (dxC / distC) * radialForce) * motionScale;
-              forceY += ((targetVy - p.vy) * 0.08 + (dyC / distC) * radialForce) * motionScale;
-
-              if (Math.abs(distC - targetRadius) < 15) captured = true;
-            }
-          });
-        }
-        p.isCaptured = captured;
-
-        // 3. Nomad (random transversal takeover)
-        const takeover = Math.random() < (mode === 'nomad' ? 1 : mode === 'conflict' ? 0.15 : 0.01);
-        const isNomad = mode === 'nomad' || (mode === 'conflict' && i % 3 === 0);
-        if (takeover || (mode === 'conflict' && i % 3 === 0)) {
-          const chaoticAngle = Math.sin(time * 0.5 + i) * Math.PI * 2 + p.intensity * Math.PI;
-          const transversal = nomadIntensity * intensity * 4 * p.speedMult * motionScale;
-          forceX += Math.cos(chaoticAngle) * transversal;
-          forceY += Math.sin(chaoticAngle) * transversal;
-          forceX += (Math.random() - 0.5) * nomadIntensity * 5 * motionScale;
-          forceY += (Math.random() - 0.5) * nomadIntensity * 5 * motionScale;
-          if (takeover) p.isCaptured = false;
-        }
-
-        p.vx += forceX;
-        p.vy += forceY;
-        p.vx *= 0.96;
-        p.vy *= 0.96;
-        p.x += p.vx;
-        p.y += p.vy;
-
-        // Respawn at a random edge
-        if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) {
-          const side = Math.floor(Math.random() * 4);
-          if (side === 0) { p.x = 0; p.y = Math.random() * height; p.vx = Math.random() * 2; p.vy = (Math.random() - 0.5) * 2; }
-          else if (side === 1) { p.x = width; p.y = Math.random() * height; p.vx = -Math.random() * 2; p.vy = (Math.random() - 0.5) * 2; }
-          else if (side === 2) { p.x = Math.random() * width; p.y = 0; p.vx = (Math.random() - 0.5) * 2; p.vy = Math.random() * 2; }
-          else { p.x = Math.random() * width; p.y = height; p.vx = (Math.random() - 0.5) * 2; p.vy = -Math.random() * 2; }
-          p.trail = [];
-        }
-
-        p.trail.push({ x: p.x, y: p.y });
-        if (p.trail.length > 10) p.trail.shift();
-
-        let color = '#94a3b8';
-        if (p.isCaptured) color = '#00aeef';
-        else if (isWarded) color = '#b8860b';
-        else if (isNomad) color = '#ec008c';
-
-        ctx.fillStyle = color;
+      // Each society's tidal radius, its threshold, brighter when the alarm is raised.
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 6]);
+      for (let s = 0; s < orbits.socCount.length; s++) {
+        if (orbits.socCount[s] < 4) continue;
+        ctx.strokeStyle = orbits.socAlarm[s] ? 'rgba(224, 168, 0, 0.9)' : 'rgba(224, 168, 0, 0.3)';
         ctx.beginPath();
-        const baseSize = p.isCaptured ? 3 : isWarded ? 2.5 : isNomad ? nomadSize : 2;
-        ctx.arc(p.x, p.y, baseSize * p.sizeMult, 0, Math.PI * 2);
+        ctx.ellipse(orbits.socX[s] * sx, orbits.socY[s] * sy, orbits.socTide[s] * sx, orbits.socTide[s] * sy, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      // The bodies.
+      for (let i = 0; i < orbits.n; i++) {
+        ctx.fillStyle = colorOf(i);
+        const r = orbits.isCompany[i] ? 16 : 7;
+        ctx.beginPath();
+        ctx.arc(orbits.x[i] * sx, orbits.y[i] * sy, r, 0, Math.PI * 2);
         ctx.fill();
-
-        if (!p.isCaptured) {
-          ctx.strokeStyle = color + '44';
-          ctx.beginPath();
-          p.trail.forEach((pos, idx) => (idx === 0 ? ctx.moveTo(pos.x, pos.y) : ctx.lineTo(pos.x, pos.y)));
+        if (orbits.kind[i] === ARMY) {
+          ctx.strokeStyle = MAGENTA;
+          ctx.lineWidth = 5;
           ctx.stroke();
         }
-      });
+      }
+
+      // Narration: events first, then what holds.
+      last.frame++;
+      let event: Event | null = null;
+      if (societies < last.societies) event = 'stripped';
+      else if (orbits.absorbed > last.absorbed) event = 'absorbed';
+      else if (co.caught > last.caught) event = 'caught';
+      else if (heldTrend.length === 90 && heldTrend[0] - shares.held > 0.08 && co.total - co.caught > 0) event = 'scatter';
+      else if (societies > last.societies) event = 'formed';
+      else if (orbits.socAlarm.some((a, s) => a && orbits!.socCount[s] >= 4) && p.cool > 0) event = 'tighten';
+      last.societies = societies;
+      last.absorbed = orbits.absorbed;
+      last.caught = co.caught;
+      if (mode === 'conflict') {
+        captionAge++;
+        const next = event
+          ? EVENTS[event]
+          : shares.held > 0.5
+            ? HOLDING.capital
+            : societies >= 11
+              ? HOLDING.societies
+              : co.total - co.caught > 1
+                ? HOLDING.companies
+                : MIXTURE;
+        // Events may cut in after a shorter hold, so that they are reported while they happen.
+        if (next !== caption && (captionAge > PHASE_HOLD || (event && captionAge > 90))) {
+          caption = next;
+          captionAge = 0;
+        }
+      }
+      const cap = mode === 'conflict' ? caption : (MODE_CAPTION[mode] ?? null);
+      narration = cap
+        ? {
+            ...cap,
+            series: [
+              { values: history.held, color: CYAN, label: 'held by the capital city' },
+              { values: history.societies, color: YELLOW, label: 'societies on their own' },
+              { values: history.companies, color: MAGENTA, label: 'companies free' },
+              { values: history.army, color: '#cbd5e1', label: 'companies absorbed' },
+            ],
+            span: SPAN,
+          }
+        : null;
+
+      // Explain layer: the capital, a society with its tidal radius, and a company.
+      if (f.explain) {
+        // Tags keep clear of the legend and of the capital, where most of the action is.
+        const zone = (8 + 14 * shares.held) * sx;
+        beginTags([...(f.keepClear ?? []), { x: orbits.cx * sx - zone, y: orbits.cy * sy - zone, w: zone * 2, h: zone * 2 }]);
+        const bounds = { width, height };
+        tags.capital.update(
+          () => ({ x: orbits!.cx * sx, y: orbits!.cy * sy - zone }),
+          () => ({ anchor: 0, x: orbits!.cx * sx, y: orbits!.cy * sy - zone }),
+        );
+        tags.capital.draw(ctx, 'CAPTURE · the capital city: its orbits are its order, every movement made relative to it', CYAN, bounds);
+        if (mode !== 'nomad') {
+          // A society in the upper part of the field, followed by its center.
+          tags.society.update(
+            (s) => (orbits!.socCount[s] >= 4 ? { x: orbits!.socX[s] * sx, y: orbits!.socY[s] * sy } : null),
+            () => {
+              for (let tries = 0; tries < 50; tries++) {
+                const s = (Math.random() * orbits!.socCount.length) | 0;
+                if (orbits!.socCount[s] >= 8 && orbits!.socY[s] < H * 0.55) return { anchor: s, x: orbits!.socX[s] * sx, y: orbits!.socY[s] * sy };
+              }
+              return null;
+            },
+          );
+          if (!tags.society.lost) societyFate = null;
+          else if (!societyFate) societyFate = 'WARDING OFF · this society was stripped by the capital city’s tides, its members now circling the capital city';
+          const s = tags.society.current;
+          const alarmed = s !== null && orbits.socAlarm[s];
+          tags.society.draw(
+            ctx,
+            alarmed ? 'WARDING OFF · a society tightening its own orbits to keep the capital city’s threshold (the dashed ring) outside it' : 'WARDING OFF · a society running on its own code, its own orbits',
+            YELLOW,
+            bounds,
+            societyFate ?? 'WARDING OFF · this society has come apart',
+          );
+        }
+        if (mode !== 'nonstate' && mode !== 'state') {
+          tags.company.update(
+            (i) => (i < orbits!.n && orbits!.isCompany[i] ? { x: orbits!.x[i] * sx, y: orbits!.y[i] * sy } : null),
+            () => {
+              // A free company in the upper part of the field, clear of the legend.
+              for (let i = 0; i < orbits!.n; i++) if (orbits!.isCompany[i] && orbits!.kind[i] === COMPANY && orbits!.y[i] < H * 0.55) return { anchor: i, x: orbits!.x[i] * sx, y: orbits!.y[i] * sy };
+              return null;
+            },
+          );
+          const i = tags.company.current;
+          if (i !== null && i < orbits.n && orbits.isCompany[i]) companyWas = orbits.kind[i];
+          tags.company.draw(
+            ctx,
+            companyWas === ARMY ? 'CAPTURE · a company caught in orbit: the capital city’s army now' : 'WAR MACHINE · a company on its own course, outside every orbit',
+            companyWas === ARMY ? CYAN : MAGENTA,
+            bounds,
+            companyWas === ARMY ? 'CAPTURE · this company was absorbed into the capital city’s army' : 'WAR MACHINE · this company rode off the field',
+          );
+        }
+        void drawTag;
+      }
+    },
+
+    narrate() {
+      return narration;
     },
   };
 }
@@ -215,35 +358,36 @@ export const cosmic: ModelDef = {
   sidebarIcon: Orbit,
   headerIcon: Magnet,
   title: 'Cosmic Metaphysics',
-  subtitle: 'Gravity // Orbits',
-  badge: 'Orbital',
-  describe: (mode) => `Cosmic Metaphysics Simulation: An orbital visualization showing ${mode} captures and chaotic transversal flows.`,
+  subtitle: 'A World of Weight and Speed // Capital City, Societies, Companies',
+  frameEvery: 2,
+  stillFrames: 1200,
+  describe: (mode) =>
+    `Cosmic simulation in ${mode} mode: Newtonian gravity around a heavy center. Cyan bodies are held in the capital city’s orbits. Yellow clusters are societies on their own orbits, each with its tidal radius dashed around it. Large magenta bodies are companies on open paths, ringed in magenta and colored cyan once the capital city catches them in orbit. Gray bodies are free.`,
   controls: [
-    { kind: 'slider', key: 'particleCount', label: 'Nomad Density', min: 50, max: 500, step: 10, default: 150, tint: 'magenta', format: 'int', reinit: true },
-    { kind: 'slider', key: 'nomadIntensity', label: 'Nomad Intensity', min: 0.1, max: 2, step: 0.1, default: 0.1, tint: 'magenta', format: 'pct' },
-    { kind: 'slider', key: 'nomadSize', label: 'Nomad Size', min: 0, max: 20, step: 0.5, default: 2, tint: 'magenta', format: 'px' },
-    { kind: 'slider', key: 'stateCount', label: 'State Count', min: 1, max: 3, step: 1, default: 1, tint: 'cyan', format: 'int' },
-    { kind: 'slider', key: 'orbitalRadius', label: 'Orbital Radius', min: 50, max: 800, step: 10, default: 200, tint: 'cyan', format: 'px' },
-    { kind: 'slider', key: 'gravitationalConstant', label: 'Gravity Constant', min: 0.1, max: 2, step: 0.1, default: 0.4, tint: 'cyan', format: 'pct' },
-    { kind: 'slider', key: 'antiGravityStrength', label: 'Anti-Gravity Strength', min: 0, max: 2, step: 0.1, default: 0.5, tint: 'yellow', format: 'pct' },
-    { kind: 'slider', key: 'wardingCount', label: 'Warding Count', min: 1, max: 40, step: 1, default: 8, tint: 'yellow', format: 'int' },
-    { kind: 'slider', key: 'wardingSize', label: 'Warding Size', min: 0, max: 400, step: 5, default: 60, tint: 'yellow', format: 'px' },
-    { kind: 'slider', key: 'intensity', label: 'Global Intensity', min: 0.1, max: 1, step: 0.05, default: 0.2, tint: 'ink', format: 'pct', divider: true },
+    { kind: 'slider', key: 'capital', label: 'Capital City’s Mass (capture)', min: 100, max: 500, step: 10, default: 300, tint: 'cyan', format: 'int', reinit: true },
+    { kind: 'slider', key: 'sink', label: 'Capital City’s Drag on Societies', min: 0, max: 40, step: 1, default: 20, tint: 'cyan', format: 'int' },
+    { kind: 'slider', key: 'alarm', label: 'Societies’ Alarm (size to tidal radius)', min: 0.2, max: 1, step: 0.05, default: 0.5, tint: 'yellow', format: 'dec2' },
+    { kind: 'slider', key: 'cool', label: 'Societies’ Tightening', min: 0, max: 1, step: 0.05, default: 0.5, tint: 'yellow', format: 'dec2' },
+    { kind: 'slider', key: 'rate', label: 'Companies Arriving', min: 0, max: 0.012, step: 0.0005, default: 0.006, tint: 'magenta', format: 'x1000' },
+    { kind: 'slider', key: 'companyMass', label: 'Company Mass', min: 20, max: 300, step: 10, default: 150, tint: 'magenta', format: 'int', reinit: true },
+    { kind: 'slider', key: 'surge', label: 'Surges (unevenness)', min: 0, max: 2.5, step: 0.1, default: 1, tint: 'magenta', format: 'dec2' },
+    { kind: 'slider', key: 'speed', label: 'Steps per Snapshot', min: 1, max: 12, step: 1, default: 4, tint: 'ink', format: 'int', divider: true },
   ],
   status: (p) => [
-    ['Intensity', `${(p.intensity * 100).toFixed(0)}%`],
-    ['Particles', String(p.particleCount)],
+    ['Capital city', String(p.capital)],
+    ['Companies', (p.rate * 1000).toFixed(1)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / Capture', text: 'Gravity: bodies are pulled into rings around a center. Universal attraction became royal science’s “law of all laws” (Plateaus: 370).' },
-    { process: 'warMachine', heading: '02 / War machine', text: 'Escape: bodies are kicked out of their rings. The figure in Plateaus is the swerve, “the minimum angle, which deviates from the vertical” (489).' },
-    { process: 'wardingOff', heading: '03 / Warding off', text: 'Voids: zones push bodies outward so that no ring can form there.' },
+    { process: 'capture', heading: '01 / Capture', text: 'The capital city: a heavy center there from the start, whose orbits are its order. Its crowd slows societies until its tides strip them (overcoding), and it catches passing companies in orbit as its army (appropriation). Capture “contributes to the creation of that which it captures” (Plateaus: 448).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Companies: heavy units on open paths, outside every orbit. On contact a company tears through the capital city and flings its bodies out, but the crowd’s drag may catch it in orbit. Its object is smooth space (Plateaus: 417), and war comes “in opposition to the State-form, the destruction of which is at issue” (420).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Societies: clusters running on their own code, their own orbits. Each has a tidal radius, the threshold inside which the capital city would strip it, and when the capital city’s reach grows it tightens its orbits to keep that threshold outside it. “The threshold is in fact already there, but outside the limit” (Plateaus: 440).' },
   ],
   legend: [
-    { swatch: '#00aeef', see: 'Cyan bodies in rings', physics: 'bodies pulled toward a center and steered into fixed rings (not Newtonian)', atp: 'capture by gravity, royal science’s “law of all laws” (Plateaus: 370)' },
-    { swatch: '#ec008c', see: 'Magenta bodies', physics: 'random kicks off the rings', atp: 'the war machine, whose figure in Plateaus is the swerve, “the minimum angle” (489)' },
-    { swatch: '#b8860b', see: 'Yellow circles', physics: 'zones that push bodies outward', atp: 'warding off, in this early version only roughly modeled' },
-    { swatch: '#94a3b8', see: 'Gray bodies', physics: 'bodies drifting', atp: 'no process acting on them at the moment' },
+    { swatch: CYAN, see: 'Cyan bodies and the glow at the center', social: 'the capital city and everyone held in its orbits, every movement made relative to it', physics: 'bodies bound to the central mass on closed orbits', atp: 'a State “that comes into the world fully formed and rises up in a single stroke” (Plateaus: 427)', example: 'the levies and duties at the city gates, “filters against the fluidity of the masses” (386, citing Virilio)' },
+    { swatch: YELLOW, see: 'Yellow clusters, with dashed rings', social: 'societies running on their own code, keeping the capital city’s threshold at a distance', physics: 'clusters bound by their own gravity, each ring its tidal radius, inside which the capital city’s tides would strip it', atp: '“The threshold is in fact already there, but outside the limit” (Plateaus: 440)', example: 'a band whose members “disperse to eat or sleep separately,” so no leader gains stable power (358)' },
+    { swatch: MAGENTA, see: 'Large magenta bodies', social: 'companies on their own course, outside every orbit, at war with the State when they meet it', physics: 'heavy bodies on unbound paths, scattering what they pass and slowed by dynamical friction', atp: 'war against “the State-form, the destruction of which is at issue” (Plateaus: 420)', example: '“Mercenary or territorial? A professional army or a conscripted army?” (419), the forms of appropriation' },
+    { swatch: CYAN, see: 'Cyan bodies ringed in magenta', social: 'a company appropriated as the capital city’s army', physics: 'a heavy body caught in a bound orbit', atp: 'the army as “the form under which it is appropriated by the State” (Plateaus: 418)' },
+    { swatch: GRAY, see: 'Gray bodies', social: 'people scattered from the capital city or a society, not yet regrouped', physics: 'bodies bound to nothing', atp: 'the State’s capture of “flows of all kinds, populations, commodities or commerce, money or capital” (Plateaus: 386)' },
   ],
   create,
 };

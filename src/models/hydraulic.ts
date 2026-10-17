@@ -374,7 +374,7 @@ function create(): SimInstance {
 
       // Explain layer: the conduit's front, a segment, and a pack, each followed as it moves.
       if (f.explain) {
-        beginTags();
+        beginTags(f.keepClear);
         const bounds = { width, height };
         // Share of a kind in the neighborhood around a point, so a tag reads a region, not one cell.
         const share = (a: { x: number; y: number }, kind: number) => {

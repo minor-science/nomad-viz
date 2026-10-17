@@ -274,7 +274,7 @@ function create(): SimInstance {
 
       // Explain layer: a rank in step, a band in its own time, a wave, and the board.
       if (f.explain) {
-        beginTags();
+        beginTags(f.keepClear);
         const bounds = { width, height };
         const share = (a: { x: number; y: number }, kind: number) => {
           let c = 0;

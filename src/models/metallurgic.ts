@@ -259,7 +259,7 @@ function create(): SimInstance {
 
       // Explain layer: each tag holds on to one feature for a few seconds and follows it.
       if (f.explain) {
-        beginTags();
+        beginTags(f.keepClear);
         const bounds = { width: f.width, height: f.height };
         const centroid = (site: number) => {
           const id = lg!.cid[site];

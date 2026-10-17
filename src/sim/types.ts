@@ -23,6 +23,8 @@ export interface Frame {
   motionScale: number;
   /** Draw on-canvas tags for the Explain layer. */
   explain: boolean;
+  /** Areas on top of the canvas that tags should keep clear of (the legend), in world units. */
+  keepClear?: { x: number; y: number; w: number; h: number }[];
 }
 
 // What the narrator strip shows: a headline, an ATP line, and a chart of series scaled 0 to 1.
