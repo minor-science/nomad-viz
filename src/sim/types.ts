@@ -26,7 +26,7 @@ export interface SimInstance {
 }
 
 export type Tint = 'magenta' | 'cyan' | 'yellow' | 'ink';
-export type Format = 'int' | 'pct' | 'px' | 'x1000';
+export type Format = 'int' | 'pct' | 'px' | 'x1000' | 'dec2' | 'times';
 
 export interface SliderSpec {
   kind: 'slider';
@@ -90,5 +90,7 @@ export function formatValue(v: number, f: Format): string {
   if (f === 'pct') return `${(v * 100).toFixed(0)}%`;
   if (f === 'px') return `${v}px`;
   if (f === 'x1000') return (v * 1000).toFixed(0);
+  if (f === 'dec2') return v.toFixed(2);
+  if (f === 'times') return `${v.toFixed(2)}×`;
   return String(v);
 }

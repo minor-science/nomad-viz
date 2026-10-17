@@ -2,7 +2,7 @@ import type { ModelSources } from './types';
 
 export const metallurgicSources: ModelSources = {
   summary:
-    'Atoms are pulled toward the points of a fixed square grid, carried along a swirling field, or agitated inside moving zones. They do not bind to one another.',
+    'A supersaturated solution on a square lattice. Atoms attach and detach at random, weighted by the energy of their bonds, so small clusters keep forming and dissolving until one crosses the critical size and grows into crystal grains. Depletion can hold that threshold at a distance, and smiths follow the boundaries between grains.',
   absent: {
     polarization: 'Not modeled. ATP names polarization as the second thing primitive mechanisms keep from crystallizing (433), a lead for a later version.',
     encompassment: 'Not modeled. ATP’s metallurgy does cross formations (435), but this model has only one body of matter.',
@@ -11,28 +11,32 @@ export const metallurgicSources: ModelSources = {
     { pages: '357', quote: 'Mechanisms for warding off, preventive mechanisms, are a part of chieftainship and keep an apparatus distinct from the social body from crystallizing.', note: 'cf. Clastres.' },
     { pages: '429', quote: 'counter-State societies organizing mechanisms that ward off the State-form, which make its crystallization impossible' },
     { pages: '433', quote: 'what prevents the potential central points from crystallizing, from taking on consistency, are precisely those mechanisms that keep the formations of power both from resonating together in a higher point and from becoming polarized at a common point', note: 'Warding off holds off two thresholds, the State (resonance) and the town (polarization).' },
-    { pages: '438', quote: 'It marks the exact point at which the assemblage must reproduce itself, begin a new operation period or a new cycle, lodge itself on another territory, and beyond which the assemblage could not continue as such.', note: 'The “last,” the limit before the threshold.' },
-    { pages: '409', quote: 'We will therefore define the artisan as one who is determined in such a way as to follow a flow of matter, a machinic phylum.' },
+    { pages: '440', quote: 'depletion is the means by which primitive groups ward off the stock and maintain their assemblage', note: 'Warding off in this model.' },
+    { pages: '440', quote: 'The threshold is in fact already there, but outside the limit, which is satisfied to place the threshold at a distance, keep it at a distance.', note: 'The warding limit sits below the critical size, which stays in place the whole time.' },
+    { pages: '412', quote: 'Artisans-metallurgists are itinerants because they follow the matter-flow of the subsoil.' },
+    { pages: '413', quote: 'their space is neither the striated space of the sedentary nor the smooth space of the nomad', note: 'Of the smiths.' },
+    { pages: '415', quote: 'The nomad war machine is the form of expression, of which itinerant metallurgy is the correlative form of content.', note: 'Axiom III.' },
     { pages: '406', quote: 'forged and not cast or molded, quenched and not air cooled, produced by the piece and not in number', note: 'Of the iron sword, against the cast steel saber.' },
-    { pages: '411', quote: 'metallurgy is minor science in person' },
   ],
   borrowed: [
     { bib: 'clastres', where: '357-59', text: 'Warding off begins with Pierre Clastres’s Amazonian chiefs, who speak but cannot command.' },
-    { bib: 'simondon1958', where: '408-10, 562 n. 92', text: 'Simondon’s critique of the hylomorphic schema, form imposed on passive matter, which he traces to “the social model of work” (as ATP summarizes him).' },
-    { bib: 'simondon1964', where: '562 n. 93', text: 'Simondon on metallurgy, quoted in ATP: “Metallurgy does not entirely accommodate itself to an analysis using the hylomorphic schema.” His own model of individuation is a crystal growing in a metastable solution.' },
+    { bib: 'simondon1964', where: '555 n. 33, 562 n. 93', text: 'Simondon’s model of individuation is a crystal growing from a seed in a metastable solution, which is what this model now simulates. ATP quotes him on metallurgy: “Metallurgy does not entirely accommodate itself to an analysis using the hylomorphic schema.”' },
+    { bib: 'simondon1958', where: '408-10, 562 n. 92', text: 'The critique of the hylomorphic schema, form imposed on passive matter, which Simondon traces to “the social model of work” (as ATP summarizes him).' },
     { bib: 'childe', where: '412', text: 'The smith as the first specialized artisan, itinerant because metal must be followed.' },
   ],
   physics: [
-    { name: 'Classical nucleation theory', tex: '\\Delta G(r) = -\\tfrac{4}{3}\\pi r^3\\,\\Delta g_v + 4\\pi r^2 \\gamma, \\qquad r^* = \\frac{2\\gamma}{\\Delta g_v}', text: 'A crystal starts as a cluster of atoms in a supercooled or supersaturated medium. Below the critical radius r* the cluster costs more in surface energy (γ) than it gains in bulk (Δg_v), and dissolves. Above it, the cluster grows. The medium can stay liquid well below its freezing point until a cluster crosses r*.', bib: ['volmerWeber', 'beckerDoring'] },
-    { name: 'Hooke’s law', tex: 'F = -k\\,\\Delta x', text: 'What the code actually uses: each atom is pulled toward the nearest grid point by a spring.' },
-    { name: 'Superfluidity', text: 'A real state of matter, found in helium-4 below 2.17 K, in which a liquid flows without viscosity. It has no bearing on metallurgy, and ATP does not use it.', bib: ['kapitza', 'allenMisener'] },
+    { name: 'Lattice gas', tex: 'E = -\\sum_{\\langle ij \\rangle} J_{ij}\\, n_i n_j - \\mu \\sum_i n_i, \\qquad \\Delta\\mu = \\mu - \\mu_c, \\quad \\mu_c = -2J', text: 'Each site holds an atom (n = 1) or not. Neighboring atoms bind with energy J, weaker across a grain boundary. On a square lattice, solid and solution coexist at μ_c = −2J, so Δμ > 0 is a supersaturated solution, one that would rather be solid.', bib: ['leeYang'] },
+    { name: 'Metropolis Monte Carlo', tex: 'P(\\text{accept}) = \\min\\left(1,\\; e^{-\\Delta E / T}\\right)', text: 'At random sites, an atom attaches or detaches with this probability, so the lattice samples the states that thermal motion would visit.', bib: ['metropolis'] },
+    { name: 'Critical size (classical nucleation theory, two dimensions)', tex: '\\Delta G(n) = -n\\,\\Delta\\mu + 2\\gamma\\sqrt{\\pi n}, \\qquad n^* = \\frac{\\pi \\gamma^2}{\\Delta\\mu^2}', text: 'A cluster of n atoms gains Δμ per atom and pays γ per unit of edge. Below n* it costs more than it gains and tends to dissolve, while above n* it tends to grow. So the solution can stay liquid for a long time, until some cluster gets past n*.', bib: ['volmerWeber', 'beckerDoring'] },
+    { name: 'Line tension', tex: '\\gamma(T) = \\frac{J}{2} - T \\ln \\coth \\frac{J}{4T}', text: 'Onsager’s exact result for the square-lattice Ising model, written for the lattice gas. It falls to zero at the critical temperature, T_c ≈ 0.567 J.', bib: ['onsager'] },
+    { name: 'Grain orientations', text: 'Atoms carry one of Q orientations, and an atom can switch to a neighbor’s orientation, as in the Potts-model simulations of grain growth. Where grains meet, a grain boundary forms.', bib: ['anderson'] },
   ],
   code:
-    'In capture mode each atom feels a spring toward the nearest point of a square grid with 40-unit spacing, and counts as fixed once it is close. War-machine atoms follow a swirling vector field plus random kicks. Inhibitor zones add random kicks. Atoms never interact with one another.',
+    'Each frame runs a few Monte Carlo sweeps (one attempt per site on average) on a lattice with wrapped edges. An attaching atom takes the orientation most common among its neighbors, a simplification under which the moves only approximately satisfy detailed balance. Clusters are counted after every frame and colored gray until they pass the threshold, then cyan by grain. The threshold is set at three times the theory’s estimate of n*, because clusters that large were measured to dissolve on this lattice (docs/notes/nucleation-calibration.md). Warding off removes, once per operation period, the largest clusters between the warding limit and the threshold. Smiths walk along grain boundaries, then along the solid’s edge, and head for the nearest boundary when they lose it.',
   divergences: [
-    { kind: 'model', text: 'The crystal here is a mold. The grid exists before any atom arrives and is imposed from outside, which is exactly the hylomorphic schema Simondon criticizes and ATP borrows (408-10). A real crystal grows from a seed, as atoms bind to one another.' },
-    { kind: 'model', text: '“Superfluidity” is not ATP’s term. ATP’s metallurgy is the smith who follows the matter-flow (409), a figure missing from the model.' },
-    { kind: 'model', text: 'Warding off appears as random heating. In ATP it works by anticipation: the “last” marks the point beyond which an assemblage “could not continue as such” (438), keeping the threshold “at a distance” (440). Nucleation has a real threshold of this kind, the critical radius, which a rebuild could use (work plan, Phase 3).' },
-    { kind: 'science', text: 'When ATP speaks of an apparatus “crystallizing” (357), or of the State’s “crystallization” (429), it uses a figure for crossing a threshold. Reading it as nucleation takes the figure more literally than ATP does, and the visualizer should say so whenever it does.' },
+    { kind: 'science', text: 'Nucleation is real physics, and the critical size is a real threshold, there before anything crosses it. Yet when ATP speaks of an apparatus “crystallizing” (357), or of the State’s “crystallization” (429), it uses a figure. Reading it as nucleation takes the figure more literally than ATP does.', bib: ['volmerWeber'] },
+    { kind: 'model', text: 'Depletion here acts from outside the physics, much as stirring or filtering a solution would. In ATP warding off is a society’s own mechanism (357). The model shows what such a mechanism has to do, which is to act below the threshold and before it, not how a society does it.' },
+    { kind: 'model', text: 'The smiths follow the matter but do not yet work it. ATP’s smith forges and quenches (406), which changes the singularities of the metal. A later version could let them.' },
+    { kind: 'model', text: 'The previous version of this model pulled atoms onto a fixed grid, which is a mold, the very hylomorphic schema Simondon criticizes (408-10). Here the crystal grows from its own seeds. Its earlier label, “superfluidity,” named a property of liquid helium near absolute zero, not anything in ATP or in metallurgy.' },
   ],
 };
