@@ -33,6 +33,7 @@ export function drawTag(
   text: string,
   color: string,
   bounds: { width: number; height: number },
+  glide?: { lx?: number; ly?: number },
 ) {
   // Two tags of the same kind never show at once; different kinds may, even for one process.
   if (shown.has(text)) return;
@@ -54,11 +55,23 @@ export function drawTag(
     if (ly + h > bounds.height - 8) ly = 8 + k * (h + 8);
   }
   placed.push({ x: lx, y: ly, w, h });
+  // A tag that follows something moving glides its box toward the new spot instead of jumping.
+  if (glide) {
+    if (glide.lx !== undefined && glide.ly !== undefined) {
+      lx = glide.lx + (lx - glide.lx) * 0.1;
+      ly = glide.ly + (ly - glide.ly) * 0.1;
+    }
+    glide.lx = lx;
+    glide.ly = ly;
+  }
   ctx.strokeStyle = color;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(x, y);
-  ctx.lineTo(lx < x ? lx + w : lx, ly + h / 2);
+  // The leader line meets the nearest point of the box, so it moves continuously as the box glides.
+  const ex = Math.max(lx, Math.min(x, lx + w));
+  const ey = ex === x ? (y < ly ? ly : ly + h) : ly + h / 2;
+  ctx.lineTo(ex, ey);
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(x, y, 5, 0, Math.PI * 2);
@@ -86,6 +99,7 @@ export class StickyTag<A> {
   }
   private age = 0;
   private alpha = 0;
+  private box: { lx?: number; ly?: number } = {};
   private dwell: number;
   private minDwell: number;
   /**
@@ -123,8 +137,9 @@ export class StickyTag<A> {
       }
     }
     if (pos) {
-      this.x += (pos.x - this.x) * 0.12;
-      this.y += (pos.y - this.y) * 0.12;
+      // Follow gently, so a feature whose position jitters still moves its tag smoothly.
+      this.x += (pos.x - this.x) * 0.07;
+      this.y += (pos.y - this.y) * 0.07;
       this.alpha = Math.min(1, this.alpha + 0.08);
     } else {
       this.alpha = Math.max(0, this.alpha - 0.05);
@@ -134,10 +149,13 @@ export class StickyTag<A> {
 
   /** Draw the tag; `lostText` replaces the text while the feature is gone. */
   draw(ctx: CanvasRenderingContext2D, text: string, color: string, bounds: { width: number; height: number }, lostText?: string, lostColor?: string) {
-    if (this.alpha <= 0) return;
+    if (this.alpha <= 0) {
+      this.box = {};
+      return;
+    }
     ctx.save();
     ctx.globalAlpha = this.alpha * (this.lost ? 0.8 : 1);
-    drawTag(ctx, this.x, this.y, this.lost && lostText ? lostText : text, this.lost && lostColor ? lostColor : color, bounds);
+    drawTag(ctx, this.x, this.y, this.lost && lostText ? lostText : text, this.lost && lostColor ? lostColor : color, bounds, this.box);
     ctx.restore();
   }
 }
