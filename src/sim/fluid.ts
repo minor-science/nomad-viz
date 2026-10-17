@@ -74,6 +74,27 @@ export class Fluid {
     }
   }
 
+  /** Stir a vortex into the water: rotation of the given strength (cells per step at its edge)
+   * within a radius, fading toward the rim. */
+  addVortex(cx: number, cy: number, radius: number, strength: number) {
+    const { nx, ny, u, v, solid } = this;
+    const r2 = radius * radius;
+    for (let y = Math.max(1, Math.floor(cy - radius)); y <= Math.min(ny - 2, Math.ceil(cy + radius)); y++) {
+      for (let x = Math.max(1, Math.floor(cx - radius)); x <= Math.min(nx - 2, Math.ceil(cx + radius)); x++) {
+        const i = x + y * nx;
+        if (solid[i]) continue;
+        const dx = x - cx;
+        const dy = y - cy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2 || d2 === 0) continue;
+        const d = Math.sqrt(d2);
+        const s = (strength * (d / radius) * (1 - d2 / r2) * 2) / d;
+        u[i] += -dy * s;
+        v[i] += dx * s;
+      }
+    }
+  }
+
   /** Make one cell solid or fluid (used by embankments that erode and are rebuilt). */
   setCell(i: number, isSolid: boolean) {
     this.solid[i] = isSolid ? 1 : 0;
