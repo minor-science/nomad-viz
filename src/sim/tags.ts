@@ -59,6 +59,10 @@ export class StickyTag<A> {
   /** True while the tag outlives a feature that has disappeared. */
   lost = false;
   private anchor: A | null = null;
+  /** The feature currently tagged (null if none). */
+  get current(): A | null {
+    return this.anchor;
+  }
   private age = 0;
   private alpha = 0;
   private dwell: number;

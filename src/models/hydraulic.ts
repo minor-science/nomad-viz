@@ -261,8 +261,8 @@ function create(): SimInstance {
       if (f.explain) {
         beginTags();
         const bounds = { width, height };
-        drawTag(ctx, 6, (ny * 0.25) * sy, 'INFLOW · the river enters, faster on top, before anything channels or turns it', '#f2f2f2', bounds);
-        if (banks && season > 0.5) drawTag(ctx, nx * 0.3 * sx, 3 * sy, 'FLOOD · the river rises; banks erode where the stress passes critical', '#ec008c', bounds);
+        drawTag(ctx, 6, (ny * 0.25) * sy, 'INFLOW · flows of people, goods, and labor', '#f2f2f2', bounds);
+        if (banks && season > 0.5) drawTag(ctx, nx * 0.3 * sx, 3 * sy, 'SURGE · migration and flight beyond what the routes can hold', '#ec008c', bounds);
         // A vortex, followed as it drifts with the water.
         vortexTag.update(
           (a) => {
@@ -290,19 +290,15 @@ function create(): SimInstance {
             return { anchor: a, x: a.x * sx, y: a.y * sy };
           },
         );
-        vortexTag.draw(ctx, 'WAR MACHINE · a vortex: turbulence holding open water as smooth space', '#ec008c', bounds, 'the vortex has spun down or drifted out');
+        vortexTag.draw(ctx, 'WAR MACHINE · a band holds its own ground, off the assigned routes', '#ec008c', bounds, 'the band disperses');
         if (channeled) {
           const rows = [0, ...bankRows(K, ny), ny - 1];
           const xEnd = mode === 'state' ? 0.9 : BANKS_END - 0.05;
           for (let c = 0; c < K; c++) {
-            const h = rows[c + 1] - rows[c] - 1;
-            const u = channelSpeed[c];
-            const re = params.viscosity > 0 ? Math.round((Math.abs(u) * h) / params.viscosity) : null;
             const turbulent = channelCross[c] > TURBULENT;
-            const nums = `speed ${u.toFixed(2)}${re !== null ? `, Re ${re}` : ''}`;
             const label = turbulent
-              ? `WAR MACHINE · channel ${c + 1} has turned turbulent inside the conduit (${nums})`
-              : `CAPTURE · channel ${c + 1} runs in layers, the State's conduit (${nums})`;
+              ? `WAR MACHINE · vagabondage: flows leave their assigned routes`
+              : `CAPTURE · labor and goods kept to assigned routes`;
             drawTag(ctx, nx * xEnd * sx, ((rows[c] + rows[c + 1]) / 2) * sy, label, turbulent ? '#ec008c' : '#00aeef', bounds);
           }
         }
@@ -315,7 +311,7 @@ function create(): SimInstance {
               return null;
             },
           );
-          breachTag.draw(ctx, 'WAR MACHINE · a breach: smooth space overspills the bank, until repair', '#ec008c', bounds, 'CAPTURE · the breach is repaired, the bank stands again');
+          breachTag.draw(ctx, 'WAR MACHINE · a route breaks down; flows go their own way', '#ec008c', bounds, 'CAPTURE · the State re-routes and re-registers them');
           bankTag.update(
             (i) => (fluid!.solid[i] && bk.integrity[i] >= 0 ? { x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy } : null),
             () => {
@@ -323,12 +319,12 @@ function create(): SimInstance {
               return null;
             },
           );
-          bankTag.draw(ctx, 'CAPTURE · an embankment, kept in repair to prevent turbulence', '#00aeef', bounds, 'WAR MACHINE · this bank has just given way');
+          bankTag.draw(ctx, 'CAPTURE · a fixed path that regulates circulation', '#00aeef', bounds, 'WAR MACHINE · the path gives way');
         }
         if (mode === 'town' || mode === 'conflict') {
           const t = TOWN[mode];
-          drawTag(ctx, nx * t.entry * sx, ny * ENTRY_Y * sy, 'POLARIZATION · all water enters the town by this gate', '#2f8f4e', bounds);
-          drawTag(ctx, nx * t.exit * sx, ny * EXIT_Y * sy, 'POLARIZATION · and leaves by this one, after circling the basin', '#2f8f4e', bounds);
+          drawTag(ctx, nx * t.entry * sx, ny * ENTRY_Y * sy, 'POLARIZATION · the market town: everything enters by its gate', '#2f8f4e', bounds);
+          drawTag(ctx, nx * t.exit * sx, ny * EXIT_Y * sy, 'POLARIZATION · and leaves by another, toward other towns', '#2f8f4e', bounds);
         }
       }
 
@@ -385,17 +381,17 @@ export const hydraulic: ModelDef = {
     ['Flood', `${Math.round(p.flood * 100)}%`],
   ],
   cards: [
-    { process: 'capture', heading: '01 / Capture', text: 'Embankments. The stream, split into narrow channels, runs in layers, since a narrow channel has a low Reynolds number. ATP: the State needs “conduits, pipes, embankments, which prevent turbulence” (363).' },
-    { process: 'warMachine', heading: '02 / War machine', text: 'Turbulence. In open water the faster stream rolls up over the slower one from a small swerve at the inlet, and floods breach the banks. ATP: a movement “distributed by turbulence across a smooth space” (363).' },
-    { process: 'polarization', heading: '03 / Polarization', text: 'The town. Water must enter by one gate and leave by another, circling through the basin between. ATP: the town “is defined by entries and exits; something must enter it and exit from it” (432).' },
+    { process: 'capture', heading: '01 / Capture', text: 'Channels. Embankments split the flow into fixed paths where it runs in layers: labor, goods, and people moved along assigned routes. ATP: the State regulates “the movement of the flow of labor, assigning it channels and conduits” (368).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Turbulence. In open water the flow rolls into eddies that hold their own ground, and surges break the channels: vagabondage, migration, flight. ATP: a movement “distributed by turbulence across a smooth space” (363).' },
+    { process: 'polarization', heading: '03 / Polarization', text: 'The town. Every flow must enter by one gate and leave by another, as goods pass through a market or a port. ATP: the town “is defined by entries and exits; something must enter it and exit from it” (432).' },
   ],
   legend: [
-    { swatch: '#f2f2f2', see: 'Arrows at the left', physics: 'the inflow, longer where the water is faster', atp: 'the flow before it is channeled or turned', example: 'a river entering a floodplain' },
-    { swatch: '#00aeef', see: 'Cyan streaks', physics: 'flow running in parallel layers (laminar)', atp: 'striated space, flows that “proceed by parallel, laminar layers” (363)', example: 'the canals and dikes of Wittfogel’s hydraulic empires' },
-    { swatch: '#ec008c', see: 'Magenta streaks', physics: 'water turning in eddies (high vorticity)', atp: 'smooth space, a movement “distributed by turbulence” (363)', example: 'the steppe, the desert, the sea' },
-    { swatch: '#94a3b8', see: 'Gray banks', physics: 'no-slip walls that narrow the flow and lower its Reynolds number; they fade as they erode', atp: 'capture: “conduits, pipes, embankments, which prevent turbulence” (363)', example: 'a flood breaching dikes, and the dikes rebuilt' },
-    { swatch: '#2f8f4e', see: 'Two walls with gates', physics: 'water forced in at one gate and out at another, circling the basin between', atp: 'polarization: the town “is defined by entries and exits” (432)', example: 'market towns and ports, such as the Hanse and Venice' },
-    { swatch: '#475569', see: 'Channel tags', physics: 'each channel’s speed, Reynolds number, and measured state (laminar or turbulent)', atp: 'the same water striated or smooth depending on the space it is given' },
+    { swatch: '#f2f2f2', see: 'Arrows at the left', social: 'flows of people, goods, and labor', physics: 'the inflow, longer where it is faster', atp: 'the State captures “flows of all kinds, populations, commodities or commerce, money or capital” (386)' },
+    { swatch: '#00aeef', see: 'Cyan streaks', social: 'regulated circulation along assigned routes', physics: 'flow running in parallel layers (laminar)', atp: 'fixed paths that “restrict speed, regulate circulation, relativize movement” (386)', example: 'labor drafted for public works on the spot, the corvée (368)' },
+    { swatch: '#ec008c', see: 'Magenta streaks', social: 'flows off the assigned routes, holding their own ground: vagabondage, nomadism', physics: 'water turning in eddies (high vorticity)', atp: 'a movement “distributed by turbulence” (363), which the State sets out to conquer as “a band vagabondage” (368)', example: 'the itinerant masons, carpenters, and smiths of ATP 368' },
+    { swatch: '#94a3b8', see: 'Gray banks', social: 'the State’s fixed paths: roads, registers, assigned work', physics: 'walls that narrow the flow and lower its Reynolds number; they fade as they erode', atp: 'the flow of labor assigned “channels and conduits” (368)' },
+    { swatch: '#cbd5e1', see: 'Breaches', social: 'routes breaking under a surge of migration or flight, then re-established', physics: 'erosion where the flow passes a critical speed, repair in calm water', atp: 'smooth and striated “exist only in mixture” (474)' },
+    { swatch: '#2f8f4e', see: 'Two walls with gates', social: 'a market town or port that every flow must pass through', physics: 'water forced in at one gate and out at another, circling the basin between', atp: 'the town “is defined by entries and exits” (432)', example: 'the Hanse, Venice' },
   ],
   create,
 };

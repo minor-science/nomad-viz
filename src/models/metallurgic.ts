@@ -22,6 +22,11 @@ const RELAX_RATIO = 0.5;
 const REFERENCE_SITES = 36800;
 // Share of each frame's color taken from the new state (the rest carries over), to calm flicker.
 const BLEND = 0.35;
+// Smiths take one step every few sweeps, so they can be followed by eye; their carving chance is
+// raised to match, keeping the carving rate per sweep the same.
+const SMITH_PACE = 1 / 3;
+// Sweeps between the bands' moves to new territories (the operation period).
+const TERRITORY_PERIOD = 400;
 
 const SOLUTION = [15, 23, 42];
 const EMBRYO = [100, 116, 139];
@@ -51,9 +56,11 @@ function create(): SimInstance {
   let mobHistory: number[] = [];
   let smooth: Float32Array | null = null;
   let acc = 0;
+  let smithAcc = 0;
+  let sinceShift = 0;
   const tags = {
     capture: new StickyTag<number>(),
-    embryo: new StickyTag<number>(300, 240),
+    embryo: new StickyTag<number>(240, 45),
     band: new StickyTag<number>(),
     smith: new StickyTag<number>(),
   };
@@ -103,9 +110,19 @@ function create(): SimInstance {
         lg.sweep(p, 1);
         // The matter-flow: dissolved atoms supplied each sweep.
         lg.reservoir!.dissolved += params.feed * scale;
-        if (smithing) smiths.step(1, params.carve);
+        if (smithing) {
+          smithAcc += SMITH_PACE;
+          while (smithAcc >= 1) {
+            smithAcc -= 1;
+            smiths.step(1, Math.min(1, params.carve / SMITH_PACE));
+          }
+        }
         if (warding) {
           bands.step(mobilization);
+          if (++sinceShift >= TERRITORY_PERIOD) {
+            sinceShift = 0;
+            bands.shiftTerritories();
+          }
           // Mobilization rises while the stock is past the alarm level and relaxes once it falls
           // below the calm level. The lag between the two is what makes the cycles.
           sinceCount++;
@@ -191,7 +208,7 @@ function create(): SimInstance {
         for (const b of bands.list) {
           const [x, y] = at(b.i);
           ctx.beginPath();
-          ctx.arc(x, y, sx * 0.55, 0, Math.PI * 2);
+          ctx.arc(x, y, sx * (0.35 + 0.35 * b.size), 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -228,11 +245,17 @@ function create(): SimInstance {
             return r && r.c.size >= 3 && r.c.size < threshold ? r : null;
           },
           () => {
-            const e = clusters.filter((c) => c.size >= 5 && c.size < threshold).sort((a, b) => b.size - a.size)[0];
+            // Only clusters big enough to see, so the tag never points at empty solution.
+            const e = clusters.filter((c) => c.size >= Math.max(10, 0.2 * threshold) && c.size < threshold).sort((a, b) => b.size - a.size)[0];
             return e ? { anchor: siteOf(e.id), x: (e.cx + 0.5) * sx, y: (e.cy + 0.5) * sy } : null;
           },
         );
-        tags.embryo.draw(ctx, 'embryo · a formation of power that may dissolve', '#cbd5e1', bounds, 'embryo · dissolved before the threshold');
+        {
+          const site = tags.embryo.current;
+          const grew = site !== null && lg.occ[site] && lg.cid[site] >= 0 && clusters[lg.cid[site]].size >= threshold;
+          tags.embryo.draw(ctx, 'embryo · a formation of power that may dissolve', '#cbd5e1', bounds,
+            grew ? 'embryo · passed the threshold for growth' : 'embryo · dissolved before the threshold');
+        }
         if (warding && bands.list.length) {
           tags.band.update(
             (k) => (bands!.list[k] ? { x: at(bands!.list[k].i)[0], y: at(bands!.list[k].i)[1] } : null),
@@ -305,6 +328,7 @@ export const metallurgic: ModelDef = {
   title: 'Metallurgic Metaphysics',
   subtitle: 'Nucleation // Matter-Flow',
   stillFrames: 450,
+  frameEvery: 2,
   describe: (mode) =>
     `Metallurgic simulation: a solution fed with matter on a square lattice, in ${mode} mode. Gray clusters form and dissolve, cyan grains are crystal past the threshold, small yellow dots are bands that ward off, and magenta trails are smiths.`,
   controls: [
@@ -313,10 +337,10 @@ export const metallurgic: ModelDef = {
     { kind: 'slider', key: 'feed', label: 'Matter-Flow (atoms per sweep)', min: 0, max: 30, step: 1, default: 10, tint: 'ink', format: 'int' },
     { kind: 'slider', key: 'orientations', label: 'Grain Orientations', min: 1, max: 12, step: 1, default: 6, tint: 'cyan', format: 'int' },
     { kind: 'slider', key: 'bands', label: 'Bands', min: 0, max: 300, step: 10, default: 120, tint: 'yellow', format: 'int' },
-    { kind: 'slider', key: 'wearMax', label: 'Depletion Strength (max)', min: 0, max: 1, step: 0.05, default: 0.5, tint: 'yellow', format: 'pct' },
+    { kind: 'slider', key: 'wearMax', label: 'Depletion Strength (max)', min: 0, max: 1, step: 0.05, default: 1, tint: 'yellow', format: 'pct' },
     { kind: 'slider', key: 'alarm', label: 'Mobilize Above (solid)', min: 0.02, max: 0.4, step: 0.01, default: 0.15, tint: 'yellow', format: 'pct' },
     { kind: 'slider', key: 'calm', label: 'Relax Below (solid)', min: 0, max: 0.2, step: 0.01, default: 0.03, tint: 'yellow', format: 'pct' },
-    { kind: 'slider', key: 'mobilizeRate', label: 'Mobilization Speed', min: 0.0002, max: 0.005, step: 0.0002, default: 0.001, tint: 'yellow', format: 'x1000' },
+    { kind: 'slider', key: 'mobilizeRate', label: 'Mobilization Speed', min: 0.0002, max: 0.005, step: 0.0002, default: 0.002, tint: 'yellow', format: 'x1000' },
     { kind: 'slider', key: 'smiths', label: 'Smiths', min: 0, max: 32, step: 1, default: 16, tint: 'magenta', format: 'int' },
     { kind: 'slider', key: 'carve', label: 'Carving (holey space)', min: 0, max: 0.3, step: 0.01, default: 0.05, tint: 'magenta', format: 'dec2' },
     { kind: 'slider', key: 'speed', label: 'Sweeps per Frame', min: 0.25, max: 8, step: 0.25, default: 3, tint: 'ink', format: 'dec2', divider: true },
@@ -331,11 +355,11 @@ export const metallurgic: ModelDef = {
     { process: 'wardingOff', heading: '03 / Warding off', text: 'Bands. Many small agents settle on clusters and block their growth, and as the stock grows they mobilize and wear it down. ATP: “depletion is the means by which primitive groups ward off the stock” (440).' },
   ],
   legend: [
-    { swatch: '#64748b', see: 'Gray clusters', physics: 'nuclei below the critical size, which mostly dissolve', atp: 'formations of power kept from “taking on consistency” (433)', example: 'Clastres’s chiefs, who speak but cannot command' },
-    { swatch: '#00aeef', see: 'Cyan grains', physics: 'crystal past the threshold, growing from the solution', atp: 'capture: the stock, an apparatus crystallizing (357, 440)', example: 'the granary or the land register' },
-    { swatch: '#b8860b', see: 'Small yellow dots', physics: 'inhibitors that bind to surfaces and block growth (as antifreeze proteins do in ice)', atp: 'warding off by depletion, objects “destroyed or depleted rather than stockpiled” (440)', example: 'ATP’s seeds for axes, an exchange that stops at “the last” before a stock forms (437-40)' },
-    { swatch: '#ec008c', see: 'Magenta trails', physics: 'walkers on grain boundaries that melt atoms back into solution', atp: 'the smith, who follows the matter-flow and makes holey space (412-15)', example: 'a 1769 militia map of a Brazilian runaway settlement, with smithies and “holes for escape” (Carney and Rosomoff)' },
-    { swatch: '#f2f2f2', see: 'White line (chart)', physics: 'supersaturation Δμ, raised by the feed and lowered by growth', atp: 'the matter-flow that capture draws on' },
+    { swatch: '#64748b', see: 'Gray clusters', social: 'a nascent hierarchy, prestige that might harden into power', physics: 'nuclei below the critical size, which mostly dissolve', atp: 'formations of power kept from “taking on consistency” (433)', example: 'Clastres’s chiefs, who speak but cannot command' },
+    { swatch: '#00aeef', see: 'Cyan grains', social: 'a State’s stock: the granary, the treasury, the land register', physics: 'crystal past the threshold, growing from the solution', atp: 'capture: the stock, an apparatus crystallizing (357, 440)', example: 'the granary or the land register' },
+    { swatch: '#b8860b', see: 'Yellow dots of varied sizes', social: 'primitive groups warding off the stock: dispersal, sharing, using up the surplus', physics: 'inhibitors that bind to surfaces and block growth (as antifreeze proteins do in ice)', atp: 'warding off by depletion, objects “destroyed or depleted rather than stockpiled” (440)', example: 'ATP’s seeds for axes, an exchange that stops at “the last” before a stock forms (437-40)' },
+    { swatch: '#ec008c', see: 'Magenta trails', social: 'itinerant smiths and artisans, carrying know-how across societies', physics: 'walkers on grain boundaries that melt atoms back into solution', atp: 'the smith, who follows the matter-flow and makes holey space (412-15)', example: 'a 1769 militia map of a Brazilian runaway settlement, with smithies and “holes for escape” (Carney and Rosomoff)' },
+    { swatch: '#f2f2f2', see: 'White line (chart)', social: 'surplus pressing to be stocked', physics: 'supersaturation Δμ, raised by the feed and lowered by growth', atp: 'the matter-flow that capture draws on' },
   ],
   create,
 };

@@ -20,6 +20,7 @@ const FRAMEWORK: { id: ProcessId; text: string }[] = [
   { id: 'wardingOff', text: 'Primitive societies. Mechanisms that keep an apparatus “from crystallizing” (357, cf. Clastres).' },
   { id: 'warMachine', text: 'Nomads. A movement “distributed by turbulence across a smooth space” (363).' },
   { id: 'capture', text: 'States. Striating space “so as to render it homogeneous” (370).' },
+  { id: 'polarization', text: 'Towns. A circuit “defined by entries and exits” (432).' },
 ];
 
 const ACTIVE_ICON: Record<ModelId, string> = {
@@ -155,7 +156,7 @@ export default function App() {
                 </div>
               ))}
               <p className={`${highVisibility ? 'text-xs' : 'text-[10px]'} leading-tight opacity-70 pt-1 border-t border-xerox-bg/30`}>
-                Polarization (towns) and encompassment (ecumenical organizations) are not modeled yet.
+                Encompassment (ecumenical organizations) is not modeled yet.
               </p>
             </div>
           </section>

@@ -113,8 +113,10 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   useEffect(() => {
     if (!isPlaying) return;
     let id = 0;
+    let n = 0;
+    const every = model.frameEvery ?? 1;
     const tick = () => {
-      step();
+      if (n++ % every === 0) step();
       id = requestAnimationFrame(tick);
     };
     id = requestAnimationFrame(tick);
@@ -311,7 +313,8 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
                 <div key={r.see} className="flex gap-2 items-baseline text-[10px] leading-snug font-sans">
                   <span className="inline-block w-2.5 h-2.5 shrink-0 translate-y-0.5" style={{ background: r.swatch }} aria-hidden="true" />
                   <span>
-                    <b className="font-mono uppercase tracking-wider">{r.see}</b>: {r.physics}. <span className="opacity-90">ATP: {r.atp}.</span>
+                    <b className="font-mono uppercase tracking-wider">{r.see}</b>
+                    {r.social && <b className="text-[#fde68a]"> = {r.social}</b>}. <span className="opacity-80">Physics: {r.physics}.</span> <span className="opacity-90">ATP: {r.atp}.</span>
                     {r.example && <span className="opacity-70"> e.g. {r.example}.</span>}
                   </span>
                 </div>
@@ -390,7 +393,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
               {model.legend?.map((r) => (
                 <p key={r.see} className="text-[10px] leading-snug">
                   <span className="inline-block w-2.5 h-2.5 mr-1" style={{ background: r.swatch }} aria-hidden="true" />
-                  <b className="uppercase">{r.see}</b>: {r.physics}. ATP: {r.atp}.{r.example ? ` e.g. ${r.example}.` : ''}
+                  <b className="uppercase">{r.see}</b>{r.social ? ` = ${r.social}` : ''}. Physics: {r.physics}. ATP: {r.atp}.{r.example ? ` e.g. ${r.example}.` : ''}
                 </p>
               ))}
             </div>

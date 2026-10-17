@@ -65,6 +65,8 @@ export type ControlSpec = SliderSpec | PairSpec;
 export interface LegendRow {
   swatch: string;
   see: string;
+  /** What it stands for socially and politically. */
+  social?: string;
   physics: string;
   atp: string;
   example?: string;
@@ -88,6 +90,8 @@ export interface ModelDef {
   describe: (mode: Mode) => string;
   /** Modes this model stages, in button order. Defaults to DEFAULT_MODES. */
   modes?: Mode[];
+  /** Update every this many display frames (2 = 30 snapshots a second). Defaults to 1. */
+  frameEvery?: number;
   /** Frames computed for the reduced-motion still. Defaults to 150. */
   stillFrames?: number;
   controls: ControlSpec[];
