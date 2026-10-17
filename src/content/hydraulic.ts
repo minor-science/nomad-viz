@@ -4,8 +4,8 @@ export const hydraulicSources: ModelSources = {
   summary:
     'Water enters from the left, a faster stream over a slower one, and is solved as an incompressible fluid on a grid. Embankments split it into channels, open water lets it roll up into vortices, and the town makes it enter by one gate and leave by another. In conflict mode a seasonal flood erodes the embankments, calm water repairs them, and the town’s gates wait downstream.',
   absent: {
-    wardingOff: 'Not modeled. ATP gives no hydraulic version of warding off, so this model leaves it out rather than invent one.',
-    encompassment: 'Not modeled. Encompassment passes between formations (435), so it needs more than one body of water.',
+    wardingOff: 'Not modeled. Plateaus gives no hydraulic version of warding off, so this model leaves it out rather than invent one.',
+    encompassment: 'Not modeled. Encompassment passes between formations (Plateaus: 435), so it needs more than one body of water.',
   },
   atp: [
     { pages: '361', quote: 'it uses a hydraulic model, rather than being a theory of solids treating fluids as a special case; ancient atomism is inseparable from flows, and flux is reality itself, or consistency.', note: 'The first trait of nomad science, cf. Serres on Lucretius.' },
@@ -17,7 +17,7 @@ export const hydraulicSources: ModelSources = {
   ],
   borrowed: [
     { bib: 'serres', where: '361-63, 489-90, 553 n. 17', text: 'The hydraulic model, the vortex, and laminar flow come from Serres’s reading of Lucretius. The swerve at the inlet follows his clinamen, which “appears by chance in a laminar flow.”' },
-    { bib: 'wittfogel', where: '363', text: 'ATP grants “Wittfogel’s theses on the importance of large-scale waterworks for an empire,” then turns them: the State needs hydraulics, but channeled. Wittfogel’s empires rest on irrigation and flood control, which is why conflict mode has floods and repair.' },
+    { bib: 'wittfogel', where: '363', text: 'Plateaus grants “Wittfogel’s theses on the importance of large-scale waterworks for an empire,” then turns them: the State needs hydraulics, but channeled. Wittfogel’s empires rest on irrigation and flood control, which is why conflict mode has floods and repair.' },
   ],
   physics: [
     { name: 'Navier-Stokes equations (incompressible)', tex: '\\frac{\\partial \\mathbf{u}}{\\partial t} + (\\mathbf{u}\\cdot\\nabla)\\mathbf{u} = -\\frac{1}{\\rho}\\nabla p + \\nu \\nabla^2 \\mathbf{u}, \\qquad \\nabla\\cdot\\mathbf{u} = 0', text: 'The equations of motion for a viscous fluid such as water, which the model solves on a grid by Stam’s method, with MacCormack’s less diffusive advection.', bib: ['stam', 'selle'] },
@@ -28,8 +28,8 @@ export const hydraulicSources: ModelSources = {
   code:
     'An incompressible fluid on a grid about 72 cells deep: each step diffuses, projects to zero divergence, advects by MacCormack’s method, and projects again. Water enters at the left with a smooth shear profile plus a small random cross-flow (the clinamen) and leaves at the right. In conflict mode each embankment cell has an integrity that falls in proportion to how far the flow beside it exceeds a critical speed and rises in calm water; at zero it becomes water, and once restored it becomes bank again. The upper stream rises and falls once per season. Tracers ride the flow and are colored by the local vorticity, so their color reports the state of the water, not an assigned role.',
   divergences: [
-    { kind: 'science', text: 'ATP sets laminar against turbulent as State against nomad. In physics the same water does both, depending on the Reynolds number, and fast flow in a pipe is turbulent. The State’s hydraulics amount to keeping that number low, with flows held slow and narrow, which ATP 363 comes close to saying.', bib: ['reynolds'] },
-    { kind: 'model', text: 'The flood and the repair are this model’s additions, so that the processes take turns, as conflict mode requires. ATP mentions neither, though Wittfogel’s empires were built on controlling floods.', bib: ['wittfogel'] },
+    { kind: 'science', text: 'Plateaus sets laminar against turbulent as State against nomad. In physics the same water does both, depending on the Reynolds number, and fast flow in a pipe is turbulent. The State’s hydraulics amount to keeping that number low, with flows held slow and narrow, which Plateaus 363 comes close to saying.', bib: ['reynolds'] },
+    { kind: 'model', text: 'The flood and the repair are this model’s additions, so that the processes take turns, as conflict mode requires. Plateaus mentions neither, though Wittfogel’s empires were built on controlling floods.', bib: ['wittfogel'] },
     { kind: 'model', text: 'The fluid is two-dimensional, and the grid adds numerical viscosity, so the eddies are large and smooth. Real turbulence is three-dimensional, with eddies within eddies down to small scales.', bib: ['fedkiw'] },
     { kind: 'model', text: 'The bank’s stress is the speed of the flow beside it, a stand-in for the shear stress of the Shields criterion, not a measurement of it.', bib: ['shields'] },
   ],

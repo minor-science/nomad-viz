@@ -8,6 +8,7 @@ import { MODEL } from '../models';
 import { SOURCES } from '../content';
 import { BIBLIOGRAPHY } from '../content/bibliography';
 import type { ModelId } from '../sim/types';
+import { Book } from './Book';
 
 interface Props {
   modelType: ModelId;
@@ -24,7 +25,7 @@ function Tex({ tex }: { tex: string }) {
   return <div className="overflow-x-auto py-1" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-function Section({ n, title, children }: { n: string; title: string; children: React.ReactNode }) {
+function Section({ n, title, children }: { n: string; title: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="space-y-3">
       <h4 className="text-xs font-black uppercase tracking-[0.2em] border-b-2 border-xerox-ink pb-1">
@@ -83,7 +84,7 @@ export const SourcesPanel: React.FC<Props> = ({ modelType, isOpen, onClose, isHi
             </div>
 
             <div className={`flex-1 overflow-y-auto p-6 md:p-8 space-y-8 ${body} leading-relaxed font-sans`}>
-              <p className="border-l-8 border-xerox-ink pl-4 font-medium">{s.summary}</p>
+              <p className="border-l-8 border-xerox-ink pl-4 font-medium"><Book text={s.summary} /></p>
 
               <section className="space-y-2" aria-label="Processes in this model">
                 <h4 className="text-xs font-black uppercase tracking-[0.2em] border-b-2 border-xerox-ink pb-1 font-mono">Processes in this model</h4>
@@ -99,7 +100,7 @@ export const SourcesPanel: React.FC<Props> = ({ modelType, isOpen, onClose, isHi
                         />
                         <span className={on ? '' : 'opacity-70'}>
                           <b>{p.name}</b> <span className="text-[0.85em] uppercase tracking-wider opacity-70">{p.formation}</span>
-                          {on ? ' (staged here)' : `: ${s.absent[p.id] ?? 'Not modeled.'}`}
+                          {on ? ' (staged here)' : <>: <Book text={s.absent[p.id] ?? 'Not modeled.'} /></>}
                         </span>
                       </li>
                     );
@@ -107,14 +108,14 @@ export const SourcesPanel: React.FC<Props> = ({ modelType, isOpen, onClose, isHi
                 </ul>
               </section>
 
-              <Section n="01" title="What A Thousand Plateaus says">
+              <Section n="01" title={<>What <i>A Thousand Plateaus</i> says</>}>
                 <ul className="space-y-4">
                   {s.atp.map((p, i) => (
                     <li key={i}>
                       <blockquote className="border-l-4 pl-3 italic" style={{ borderColor: '#00aeef' }}>
-                        “{p.quote}” <span className="not-italic font-mono text-[0.85em]">({p.pages})</span>
+                        “{p.quote}” <span className="not-italic font-mono text-[0.85em]">(<i>Plateaus</i>: {p.pages})</span>
                       </blockquote>
-                      {p.note && <p className="pl-4 text-[0.9em] opacity-75 mt-1">{p.note}</p>}
+                      {p.note && <p className="pl-4 text-[0.9em] opacity-75 mt-1"><Book text={p.note} /></p>}
                     </li>
                   ))}
                 </ul>
@@ -125,9 +126,9 @@ export const SourcesPanel: React.FC<Props> = ({ modelType, isOpen, onClose, isHi
                   {s.borrowed.map((b) => (
                     <li key={b.bib}>
                       <b>{BIBLIOGRAPHY[b.bib].short ?? BIBLIOGRAPHY[b.bib].cite.split('.')[0]}</b>{' '}
-                      <span className="font-mono text-[0.85em] opacity-70">[ATP {b.where}]</span>
+                      <span className="font-mono text-[0.85em] opacity-70">[{/^\d/.test(b.where) ? <><i>Plateaus</i>: {b.where}</> : <Book text={b.where} />}]</span>
                       <br />
-                      {b.text}
+                      <Book text={b.text} />
                     </li>
                   ))}
                 </ul>
@@ -139,13 +140,13 @@ export const SourcesPanel: React.FC<Props> = ({ modelType, isOpen, onClose, isHi
                     <li key={p.name}>
                       <b>{p.name}</b>
                       {p.tex && <Tex tex={p.tex} />}
-                      <p>{p.text}</p>
+                      <p><Book text={p.text} /></p>
                     </li>
                   ))}
                 </ul>
                 <div className="p-4 bg-xerox-ink/5 border-2 border-xerox-ink border-dashed">
                   <p className="text-[10px] font-mono font-black uppercase tracking-widest mb-1">What this simulation computes</p>
-                  <p>{s.code}</p>
+                  <p><Book text={s.code} /></p>
                 </div>
               </Section>
 
@@ -154,9 +155,9 @@ export const SourcesPanel: React.FC<Props> = ({ modelType, isOpen, onClose, isHi
                   {s.divergences.map((d, i) => (
                     <li key={i} className="flex gap-3">
                       <span className="shrink-0 font-mono text-[10px] font-black uppercase tracking-wider border-2 border-xerox-ink px-1 h-fit mt-0.5">
-                        {d.kind === 'model' ? 'Model vs ATP' : 'ATP vs physics'}
+                        {d.kind === 'model' ? <>Model vs <i>Plateaus</i></> : <><i>Plateaus</i> vs physics</>}
                       </span>
-                      <span>{d.text}</span>
+                      <span><Book text={d.text} /></span>
                     </li>
                   ))}
                 </ul>
@@ -168,12 +169,12 @@ export const SourcesPanel: React.FC<Props> = ({ modelType, isOpen, onClose, isHi
                   {cited.map((k) => (
                     <li key={k}>
                       {BIBLIOGRAPHY[k].cite}
-                      {BIBLIOGRAPHY[k].atp && <span className="opacity-70"> Cited in ATP {BIBLIOGRAPHY[k].atp}.</span>}
+                      {BIBLIOGRAPHY[k].atp && <span className="opacity-70"> Cited in <i>Plateaus</i>: {BIBLIOGRAPHY[k].atp}.</span>}
                     </li>
                   ))}
                 </ul>
                 <p className="text-[0.85em] opacity-70">
-                  Page numbers without a prefix refer to the Minnesota translation of A Thousand Plateaus (1987).
+                  Page numbers refer to the Minnesota translation of <i>A Thousand Plateaus</i> (1987), cited as <i>Plateaus</i>.
                 </p>
               </section>
             </div>

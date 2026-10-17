@@ -15,9 +15,9 @@ export const cosmicSources: ModelSources = {
     { pages: '381', quote: 'Movement is extensive; speed is intensive.' },
   ],
   borrowed: [
-    { bib: 'serres', where: '361, 489, 553 n. 17', text: 'The clinamen, as ATP’s translator glosses Serres, is the “minimal angle leading to the formation of a vortex, and appears by chance in a laminar flow.”' },
+    { bib: 'serres', where: '361, 489, 553 n. 17', text: 'The clinamen, as Plateaus’ translator glosses Serres, is the “minimal angle leading to the formation of a vortex, and appears by chance in a laminar flow.”' },
     { bib: 'lucretius', where: 'via Serres', text: 'Atoms fall in parallel and swerve by the smallest amount, which is how anything collides and forms.' },
-    { bib: 'newton', where: '370', text: 'Universal gravitation, which ATP calls royal science’s “law of all laws.”' },
+    { bib: 'newton', where: '370', text: 'Universal gravitation, which Plateaus calls royal science’s “law of all laws.”' },
   ],
   physics: [
     { name: 'Newtonian gravity and circular orbits', tex: 'F = \\frac{G M m}{r^2}, \\qquad v_{\\text{circ}} = \\sqrt{\\frac{G M}{r}}', text: 'Orbits come in every size. Nothing in gravity sets rings at fixed spacings.', bib: ['newton'] },
@@ -28,7 +28,7 @@ export const cosmicSources: ModelSources = {
     'Bodies near a center feel an inverse-square pull, are steered toward circular speed, and are pushed toward the nearest ring at a multiple of 50 units. Every body loses 4 percent of its speed each frame, and this drag is what lets capture happen at all. War-machine bodies get random kicks. Warding zones push outward.',
   divergences: [
     { kind: 'model', text: 'Rings at fixed spacings are not Newtonian. Capture works here only because the code removes energy every frame, which hides the point that capture needs a third party.' },
-    { kind: 'model', text: 'The war machine appears as a random “takeover.” ATP’s figure from this domain is the clinamen, the smallest deviation from parallel fall, which produces vortices (361, 489). That is a minimal angle, not a random kick.' },
-    { kind: 'science', text: 'ATP puts gravity on the side of royal science (370), as the parallel fall that striates space, and the swerve on the side of nomad science. A rebuild might start from fall and swerve (work plan, Phase 6). The old label “centripetal machine” is not ATP’s.' },
+    { kind: 'model', text: 'The war machine appears as a random “takeover.” Plateaus’ figure from this domain is the clinamen, the smallest deviation from parallel fall, which produces vortices (361, 489). That is a minimal angle, not a random kick.' },
+    { kind: 'science', text: 'Plateaus puts gravity on the side of royal science (370), as the parallel fall that striates space, and the swerve on the side of nomad science. A rebuild might start from fall and swerve (work plan, Phase 6). The old label “centripetal machine” is not Plateaus’.' },
   ],
 };

@@ -6,6 +6,7 @@ import {
   type ControlSpec, type Mode, type ModelDef, type Narration, type Params, type Tint,
 } from '../sim/types';
 import { readMode, readPanel, readParams, setPanel, writeState } from '../sim/url';
+import { Book, capFirst } from './Book';
 
 const SourcesPanel = lazy(() => import('./SourcesPanel'));
 
@@ -233,7 +234,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
             <span className="text-xs font-black uppercase tracking-widest border-b-2" style={{ color, borderColor: color }}>
               {card.heading}
             </span>
-            <p className="text-[10px] font-bold leading-tight uppercase">{card.text}</p>
+            <p className="text-[10px] font-bold leading-tight uppercase"><Book text={card.text} /></p>
           </div>
         );
       })}
@@ -321,7 +322,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
         <div className="flex items-center gap-4 px-3 py-2 border-b-4 border-xerox-ink bg-black text-xerox-bg" style={{ boxShadow: `inset 6px 0 0 ${narration.color}` }} aria-live="polite">
           <div className="flex-1 min-w-0 pl-2">
             <p className="text-[11px] md:text-xs font-mono font-black uppercase leading-snug" style={{ color: narration.color }}>{narration.head}</p>
-            <p className="text-[11px] font-sans leading-snug mt-0.5 text-[#d1d5db]">{narration.sub}</p>
+            <p className="text-[11px] font-sans leading-snug mt-0.5 text-[#d1d5db]"><Book text={narration.sub} /></p>
           </div>
           {narration.series.length > 0 && (
             <div className="hidden sm:block w-[260px] shrink-0">
@@ -358,8 +359,8 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
                   <span className="inline-block w-2.5 h-2.5 shrink-0 translate-y-0.5" style={{ background: r.swatch }} aria-hidden="true" />
                   <span>
                     <b className="font-mono uppercase tracking-wider">{r.see}</b>
-                    {r.social && <b className="text-[#fde68a]"> = {r.social}</b>}. <span className="opacity-80">Physics: {r.physics}.</span> <span className="opacity-90">ATP: {r.atp}.</span>
-                    {r.example && <span className="opacity-70"> e.g. {r.example}.</span>}
+                    {r.social && <b className="text-[#fde68a]"> = {r.social}</b>}. <span className="opacity-80">Physics: {r.physics}.</span> <span className="opacity-90"><Book text={capFirst(r.atp)} />.</span>
+                    {r.example && <span className="opacity-70"> e.g. <Book text={r.example} />.</span>}
                   </span>
                 </div>
               ))}
@@ -437,7 +438,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
               {model.legend?.map((r) => (
                 <p key={r.see} className="text-[10px] leading-snug">
                   <span className="inline-block w-2.5 h-2.5 mr-1" style={{ background: r.swatch }} aria-hidden="true" />
-                  <b className="uppercase">{r.see}</b>{r.social ? ` = ${r.social}` : ''}. Physics: {r.physics}. ATP: {r.atp}.{r.example ? ` e.g. ${r.example}.` : ''}
+                  <b className="uppercase">{r.see}</b>{r.social ? ` = ${r.social}` : ''}. Physics: {r.physics}. <Book text={capFirst(r.atp)} />.{r.example ? <> e.g. <Book text={r.example} />.</> : ''}
                 </p>
               ))}
             </div>

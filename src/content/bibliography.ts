@@ -13,7 +13,7 @@ export const BIBLIOGRAPHY: Record<string, Work> = {
   beckerDoring: { cite: 'Becker, R., and W. Döring. “Kinetische Behandlung der Keimbildung in übersättigten Dämpfen.” Annalen der Physik 416, no. 8 (1935): 719-52.' },
   bohr: { cite: 'Bohr, Niels. “On the Constitution of Atoms and Molecules.” Philosophical Magazine 26 (1913): 1-25.' },
   boulez: { short: 'Boulez 1963', cite: 'Boulez, Pierre. Boulez on Music Today. Trans. Susan Bradshaw and Richard Rodney Bennett. Cambridge, Mass.: Harvard University Press, 1971 [1963].', atp: '572 n. 4' },
-  childe: { short: 'Childe', cite: 'Childe, V. Gordon. The Prehistory of European Civilization. London: Cassell, 1962. (As cited in ATP.)', atp: '562 n. 96' },
+  childe: { short: 'Childe', cite: 'Childe, V. Gordon. The Prehistory of European Civilization. London: Cassell, 1962. (As cited in Plateaus.)', atp: '562 n. 96' },
   chladni: { short: 'Chladni 1787', cite: 'Chladni, Ernst Florens Friedrich. Entdeckungen über die Theorie des Klanges. Leipzig: Weidmanns Erben und Reich, 1787.' },
   clastres: { short: 'Clastres 1974', cite: 'Clastres, Pierre. Society against the State. Trans. Robert Hurley. New York: Urizen, 1977 [1974].', atp: '553 n. 12' },
   faraday: { cite: 'Faraday, Michael. “On a Peculiar Class of Acoustical Figures.” Philosophical Transactions of the Royal Society 121 (1831): 299-340.' },

@@ -14,13 +14,14 @@ import { readModel } from './sim/url';
 import type { ModelId } from './sim/types';
 import { PROCESS, type ProcessId } from './processes';
 import { BIBLIOGRAPHY } from './content/bibliography';
+import { Book } from './components/Book';
 
 // The processes staged so far, in the charts' order (Axiom I, 351). Quotations are checked by scripts/check-atp.ts.
 const FRAMEWORK: { id: ProcessId; text: string }[] = [
-  { id: 'wardingOff', text: 'Primitive societies. Mechanisms that keep an apparatus “from crystallizing” (357, cf. Clastres).' },
-  { id: 'warMachine', text: 'Nomads. A movement “distributed by turbulence across a smooth space” (363).' },
-  { id: 'capture', text: 'States. Striating space “so as to render it homogeneous” (370).' },
-  { id: 'polarization', text: 'Towns. A circuit “defined by entries and exits” (432).' },
+  { id: 'wardingOff', text: 'Primitive societies. Mechanisms that keep an apparatus “from crystallizing” (Plateaus: 357, cf. Clastres).' },
+  { id: 'warMachine', text: 'Nomads. A movement “distributed by turbulence across a smooth space” (Plateaus: 363).' },
+  { id: 'capture', text: 'States. Striating space “so as to render it homogeneous” (Plateaus: 370).' },
+  { id: 'polarization', text: 'Towns. A circuit “defined by entries and exits” (Plateaus: 432).' },
 ];
 
 const ACTIVE_ICON: Record<ModelId, string> = {
@@ -152,7 +153,7 @@ export default function App() {
                   <span className={`font-black uppercase tracking-widest ${highVisibility ? 'text-sm' : 'text-xs'}`} style={{ color: PROCESS[f.id].color }}>
                     0{i + 1} / {PROCESS[f.id].name}
                   </span>
-                  <p className={`${highVisibility ? 'text-sm' : 'text-[11px]'} leading-tight font-medium`}>{f.text}</p>
+                  <p className={`${highVisibility ? 'text-sm' : 'text-[11px]'} leading-tight font-medium`}><Book text={f.text} /></p>
                 </div>
               ))}
               <p className={`${highVisibility ? 'text-xs' : 'text-[10px]'} leading-tight opacity-70 pt-1 border-t border-xerox-bg/30`}>
@@ -205,7 +206,7 @@ export default function App() {
 
         {/* Fixed Footer in Sidebar */}
         <footer className="shrink-0 p-4 border-t-4 border-xerox-ink bg-xerox-bg text-[9px] font-bold uppercase tracking-tighter opacity-50">
-          Deleuze & Guattari // A Thousand Plateaus, plateaus 12-13
+          Deleuze & Guattari // <i>A Thousand Plateaus</i>, plateaus 12-13
         </footer>
       </aside>
 
@@ -269,10 +270,10 @@ export default function App() {
               <div className="space-y-6 text-sm font-bold leading-tight uppercase overflow-y-auto max-h-[60vh] pr-2">
                 <section className="space-y-4">
                   <p className="border-l-4 border-xerox-ink pl-4">
-                    In A Thousand Plateaus (1980), Deleuze and Guattari “define social formations by machinic processes and not by modes of production” (435). They describe several of those processes in physical terms, as laminar and turbulent flow, crystallization, resonance, and the fall of bodies.
+                    In <i>A Thousand Plateaus</i> (1980), Deleuze and Guattari “define social formations by machinic processes and not by modes of production” (435). They describe several of those processes in physical terms, as laminar and turbulent flow, crystallization, resonance, and the fall of bodies.
                   </p>
                   <p>
-                    Each model here runs one of those descriptions as a simulation. The Sources button in every model separates what A Thousand Plateaus says, what it borrows, what the physics says, and where they part ways.
+                    Each model here runs one of those descriptions as a simulation. The Sources button in every model separates what <i>A Thousand Plateaus</i> says, what it borrows, what the physics says, and where they part ways.
                   </p>
                   <p className="bg-xerox-ink text-xerox-bg p-4">
                     These are early versions. Their Sources panels say plainly where a model departs from the book or from physics. A rebuild is under way.
@@ -287,12 +288,12 @@ export default function App() {
                       .map((w) => (
                         <li key={w.cite}>
                           {w.cite}
-                          {w.atp && <span className="opacity-70"> Cited in ATP {w.atp}.</span>}
+                          {w.atp && <span className="opacity-70"> Cited in <i>Plateaus</i>: {w.atp}.</span>}
                         </li>
                       ))}
                   </ul>
                   <p className="text-[10px] normal-case font-medium opacity-70">
-                    Page numbers without a prefix refer to the Minnesota translation of A Thousand Plateaus (1987). Code: Apache License 2.0. Text: CC BY 4.0. Built with React and HTML canvas.
+                    Page numbers refer to the Minnesota translation of <i>A Thousand Plateaus</i> (1987), cited as <i>Plateaus</i>. Code: Apache License 2.0. Text: CC BY 4.0. Built with React and HTML canvas.
                   </p>
                 </section>
 

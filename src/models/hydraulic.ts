@@ -1,16 +1,19 @@
 import { Droplets } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
 import { Fluid } from '../sim/fluid';
-import { Regimes, LAYERS, CELLS, EDDIES } from '../sim/regimes';
+import { Regimes, CELLS, EDDIES } from '../sim/regimes';
 import { HeatPatches, Wobble } from '../sim/heating';
+import { Dye } from '../sim/dye';
 import { beginTags, drawTag, StickyTag } from '../sim/tags';
 
 // Nomadology in a world where everything is liquid. Underneath is a physics-class experiment: a
-// shallow layer of liquid with a through-flow, heated unevenly from below. Depending on the flow
-// and the heat, the liquid runs in layers (laminar, capture), turns in small equal convection cells
-// (warding off), or breaks into eddies (turbulence, the war machine). In conflict mode the heaters
-// drift and surge on their own and the through-flow wavers, so the regimes press on one another
-// across the space and take the lead in turn. It is drawn abstractly, as a field of streaks.
+// shallow layer of liquid with a through-flow, heated unevenly from below, with dye released from
+// fixed sources at the left, as in Reynolds' experiment. What is at stake is where the flow goes.
+// Capture builds the conduit, carrying each lane of dye intact from its source to the far point
+// (laminar flow). Warding off holds the flow in segments, small circles that stop the conduit's
+// front (convection cells). The war machine scatters it through all of the space (turbulence). In
+// conflict the heaters drift and surge on their own and the through-flow wavers, so the conduit's
+// front advances and is driven back, and the dye changes hands.
 
 // The liquid layer, NX by NY cells, stretched over the canvas.
 const NX = 180;
@@ -18,6 +21,8 @@ const NY = 30;
 const NU = 0.005;
 const KAPPA = 0.005;
 const HEATERS = 4;
+const LANES = 8;
+const DYE_CAP = 3200;
 // Frames of history in the narrator's chart.
 const SPAN = 600;
 // Frames a caption stays up before it may change, and the window for judging who is gaining.
@@ -28,47 +33,48 @@ const CYAN = '#00aeef';
 const MAGENTA = '#ec008c';
 const YELLOW = '#e0a800';
 const WARM = '#ff6e46';
-const KIND_COLOR = [CYAN, YELLOW, MAGENTA];
+const INK = '#f2f2f2';
 
 type Caption = { head: string; sub: string; color: string };
 
-// The narrator in conflict names who is gaining on whom: GAINS[gainer][loser].
+// The narrator in conflict names who is gaining on whom: GAINS[gainer][loser], in the order
+// capture, warding off, war machine.
 const GAINS: Caption[][] = [
   [
     { head: '', sub: '', color: CYAN },
     {
-      head: 'CAPTURE GAINS · Striation. The through-flow sweeps the segmentary circles into conduits, one route from point to point (convection cells give way to laminar layers).',
-      sub: 'ATP: “One of the fundamental tasks of the State is to striate the space over which it reigns” (385).',
+      head: 'CAPTURE GAINS · The conduit pushes through the segments: bands that kept their work to themselves are drafted onto the State’s works (convection cells give way to laminar flow).',
+      sub: '“One of the fundamental tasks of the State is to striate the space over which it reigns” (Plateaus: 385).',
       color: CYAN,
     },
     {
-      head: 'CAPTURE GAINS · The State’s hydraulics. The surge passes and the conduits take the vortices back (turbulence settles into laminar layers).',
-      sub: 'ATP: the State “makes the fluid depend on the solid, and flows proceed by parallel, laminar layers” (363).',
+      head: 'CAPTURE GAINS · The surge passes, and the conduit takes the roaming journeymen back, settling them into guilds and assigned channels (turbulence settles into laminar flow).',
+      sub: '“Settling, sedentarizing labor power, regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).',
       color: CYAN,
     },
   ],
   [
     {
-      head: 'WARDING OFF GAINS · Segmentarity. Heat from below breaks the conduit into small circles, each on its own ground, and no route runs through (laminar layers give way to convection cells).',
-      sub: 'ATP: war “maintains the dispersal and segmentarity of groups” (357).',
+      head: 'WARDING OFF GAINS · Segments form ahead of the conduit’s front: bands keep their labor in their own circles, and none of it reaches the State’s works (convection cells stop the laminar flow).',
+      sub: 'War “maintains the dispersal and segmentarity of groups” (Plateaus: 357).',
       color: YELLOW,
     },
     { head: '', sub: '', color: YELLOW },
     {
-      head: 'WARDING OFF GAINS · The vortices settle into small, equal circles, so no central point takes on consistency (turbulence calms into convection cells).',
-      sub: 'ATP: mechanisms keep central points “from crystallizing, from taking on consistency” (433).',
+      head: 'WARDING OFF GAINS · The packs settle into segments, bands each working for themselves, none owing labor to a center (turbulence calms into convection cells).',
+      sub: '“the circles are not concentric, and the two segments require a third segment through which to communicate” (Plateaus: 433).',
       color: YELLOW,
     },
   ],
   [
     {
-      head: 'WAR MACHINE GAINS · The clinamen. A swerve in the laminar flow grows into vortices, and movement leaves the conduit (laminar layers break into turbulence).',
-      sub: 'ATP: “From turba to turbo: in other words, from bands or packs of atoms to the great vortical organizations” (361).',
+      head: 'WAR MACHINE GAINS · A swerve in the conduit grows into a vortex: drafted labor slips its channel and takes to the open country (laminar flow breaks into turbulence).',
+      sub: '“From turba to turbo: in other words, from bands or packs of atoms to the great vortical organizations” (Plateaus: 361).',
       color: MAGENTA,
     },
     {
-      head: 'WAR MACHINE GAINS · Smooth space. The small circles join into vortices across the whole space, a movement that holds space instead of being held by it (convection cells break into turbulence).',
-      sub: 'ATP: the war machine is “distributed by turbulence across a smooth space” (363).',
+      head: 'WAR MACHINE GAINS · The segments break open, and their members take to the road in packs that cross the whole space (convection cells break into turbulence).',
+      sub: 'The war machine is “distributed by turbulence across a smooth space” (Plateaus: 363).',
       color: MAGENTA,
     },
     { head: '', sub: '', color: MAGENTA },
@@ -76,58 +82,62 @@ const GAINS: Caption[][] = [
 ];
 const HOLDING: Caption[] = [
   {
-    head: 'CAPTURE HOLDS · Striated space. Flows run in conduits from point to point, measured and channeled (laminar layers).',
-    sub: 'ATP: conduits “constrain movement to go from one point to another” (363).',
+    head: 'CAPTURE HOLDS · Labor runs in the State’s channels, from the villages to its works, by corvée and by guild (laminar flow).',
+    sub: '“relying on forced manpower recruited on the spot (corvee) or among indigents (charity workshops)” (Plateaus: 368).',
     color: CYAN,
   },
   {
-    head: 'WARDING OFF HOLDS · Segmentarity. Small circles, each on its own ground, with no point common to them (convection cells).',
-    sub: 'ATP: “the circles are not concentric, and the two segments require a third segment through which to communicate” (433).',
+    head: 'WARDING OFF HOLDS · Bands keep their work in their own circles, sharing out and dispersing, and the conduit cannot draft them (convection cells).',
+    sub: 'The members of a band “disperse to eat or sleep separately,” so the leader cannot acquire stable power (Plateaus: 358).',
     color: YELLOW,
   },
   {
-    head: 'WAR MACHINE HOLDS · The vortical model. Movement occupies an open space with no conduits or channels (turbulence).',
-    sub: 'ATP: “Smooth space is a field without conduits or channels” (371).',
+    head: 'WAR MACHINE HOLDS · Masons, carpenters, and smiths move from site to site, off every channel the State assigns (turbulence).',
+    sub: '“journeymen’s associations, or compagnonnages, the nomadic or itinerant bodies of the type formed by masons, carpenters, smiths” (Plateaus: 368).',
     color: MAGENTA,
   },
 ];
 const MIXTURE: Caption = {
-  head: 'IN MIXTURE · Conduits, segmentary circles, and vortices side by side, each pressing on the others.',
-  sub: 'ATP: smooth and striated “exist only in mixture” (474).',
+  head: 'IN MIXTURE · Some labor runs in the State’s channels, some stays in the bands’ circles, some roams in packs.',
+  sub: 'Smooth and striated “exist only in mixture” (Plateaus: 474).',
   color: '#cbd5e1',
 };
 const MODE_CAPTION: Partial<Record<Mode, Caption>> = {
   state: {
-    head: 'CAPTURE ALONE · The State’s hydraulics. A strong, steady through-flow and little heat: all movement in conduits, point to point (laminar layers).',
-    sub: 'ATP: the State subordinates hydraulic force “to conduits, pipes, embankments, which prevent turbulence” (363).',
+    head: 'CAPTURE ALONE · A strong, steady draft and little upswell: all labor runs in the State’s channels, from the villages to its works (laminar flow).',
+    sub: '“Settling, sedentarizing labor power, regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).',
     color: CYAN,
   },
   nonstate: {
-    head: 'WARDING OFF ALONE · Segmentarity. Even heat and no through-flow: a row of small equal circles, none concentric, none central (convection cells).',
-    sub: 'ATP: war “maintains the dispersal and segmentarity of groups” (357).',
+    head: 'WARDING OFF ALONE · A weak draft and even heat: bands keep their work in their own circles, and none of it reaches the State’s works (convection cells).',
+    sub: 'War “maintains the dispersal and segmentarity of groups” (Plateaus: 357).',
     color: YELLOW,
   },
   nomad: {
-    head: 'WAR MACHINE ALONE · The vortical model. Strong surges from below: vortices hold the whole space (turbulence).',
-    sub: 'ATP: “The model is a vortical one; it operates in an open space throughout which things-flows are distributed” (361).',
+    head: 'WAR MACHINE ALONE · Strong surges from below: labor leaves every channel and roams in packs across the whole space (turbulence).',
+    sub: '“The model is a vortical one; it operates in an open space throughout which things-flows are distributed” (Plateaus: 361).',
     color: MAGENTA,
   },
 };
 
-interface Tracer {
+// Faint streaks through the whole liquid, colored by what it is doing where they are, so the
+// circles and vortices show even where no dye has reached. The dye is drawn bright on top.
+interface Mote {
   x: number;
   y: number;
   px: number;
   py: number;
   age: number;
 }
+const FIELD_COLOR = ['rgba(0, 174, 239, 0.4)', 'rgba(224, 168, 0, 0.45)', 'rgba(236, 0, 140, 0.42)'];
 
 function create(): SimInstance {
   let fluid: Fluid | null = null;
   let regimes: Regimes | null = null;
   let heaters: HeatPatches | null = null;
+  let dye: Dye | null = null;
+  let motes: Mote[] = [];
   const wobble = new Wobble();
-  let tracers: Tracer[] = [];
   let trail: HTMLCanvasElement | null = null;
   let floor: Float32Array = new Float32Array(NX).fill(1);
   let heat = 0;
@@ -135,36 +145,32 @@ function create(): SimInstance {
   let captionAge = PHASE_HOLD;
   let narration: Narration | null = null;
   let acc = 0;
-  const history = { layers: [] as number[], cells: [] as number[], eddies: [] as number[], heat: [] as number[] };
+  let fronts: number[] = [];
+  const history = { reach: [] as number[], held: [] as number[], scattered: [] as number[], heat: [] as number[] };
   const tags = {
-    layers: new StickyTag<{ x: number; y: number }>(300),
-    cells: new StickyTag<{ x: number; y: number }>(300),
-    eddies: new StickyTag<{ x: number; y: number }>(300),
-  };
-
-  const spawn = (t: Tracer) => {
-    t.x = t.px = 1 + Math.random() * (NX - 3);
-    t.y = t.py = 1 + Math.random() * (NY - 3);
-    t.age = 0;
+    conduit: new StickyTag<number>(400),
+    segment: new StickyTag<{ x: number; y: number }>(300),
+    pack: new StickyTag<{ x: number; y: number }>(300),
   };
 
   return {
-    init(_w, _h, params) {
+    init() {
       fluid = new Fluid(NX, NY);
       for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) fluid.temp[x + y * NX] = y / (NY - 1);
       regimes = new Regimes(fluid.n);
       regimes.rel = 0.06;
       heaters = new HeatPatches(NX, HEATERS);
-      tracers = Array.from({ length: params.tracers }, () => {
-        const t = { x: 0, y: 0, px: 0, py: 0, age: 0 };
-        spawn(t);
-        t.age = (Math.random() * 300) | 0;
-        return t;
+      dye = new Dye(DYE_CAP, NX, NY, LANES);
+      motes = Array.from({ length: 1600 }, () => {
+        const x = 1 + Math.random() * (NX - 3);
+        const y = 1 + Math.random() * (NY - 3);
+        return { x, y, px: x, py: y, age: (Math.random() * 400) | 0 };
       });
+      for (const k of Object.keys(history) as (keyof typeof history)[]) history[k].length = 0;
     },
 
     frame(ctx, f: Frame) {
-      if (!fluid || !regimes || !heaters) return;
+      if (!fluid || !regimes || !heaters || !dye) return;
       const { mode, params, width, height, motionScale } = f;
 
       // Each mode sets the experiment's dials: the through-flow, the heat, and how unevenly it comes.
@@ -179,7 +185,7 @@ function create(): SimInstance {
         heat = params.heat * 0.2;
         surge = 0;
       } else if (mode === 'nonstate') {
-        flow = 0;
+        flow = 0.04;
         heat = params.heat * 0.8;
         even = true;
       } else if (mode === 'nomad') {
@@ -193,33 +199,30 @@ function create(): SimInstance {
       acc += params.speed * motionScale;
       const steps = Math.floor(acc);
       acc -= steps;
-      let along = flow;
+      dye.mark();
       for (let k = 0; k < steps; k++) {
         floor = even ? floor.fill(1) : heaters.step(surge, pace, wander);
-        along = mode === 'conflict' ? flow * wobble.step(0.6, 0.0015) : flow;
+        const along = mode === 'conflict' ? flow * wobble.step(0.6, 0.0015) : flow;
         fluid.stepThermal(floor, KAPPA, heat, 0.5);
         fluid.step({ nu: NU, uTop: along, uBottom: along, clinamen: 0.01, confinement: 0 });
         regimes.update(fluid);
+        dye.step(fluid, params.dye);
       }
-      const fr = regimes.fractions;
+      const stakes = dye.stats(regimes);
+      fronts = stakes.fronts;
       let floorMax = 0;
       let floorMean = 0;
       for (let x = 0; x < NX; x++) {
         floorMax = Math.max(floorMax, floor[x]);
         floorMean += floor[x] / NX;
       }
-      history.layers.push(fr[0]);
-      history.cells.push(fr[1]);
-      history.eddies.push(fr[2]);
+      history.reach.push(stakes.reach);
+      history.held.push(stakes.held);
+      history.scattered.push(stakes.scattered);
       history.heat.push(Math.min(1, (heat * floorMax) / (params.heat * 6)));
-      if (history.layers.length > SPAN) {
-        history.layers.shift();
-        history.cells.shift();
-        history.eddies.shift();
-        history.heat.shift();
-      }
+      if (history.reach.length > SPAN) for (const k of Object.keys(history) as (keyof typeof history)[]) history[k].shift();
 
-      // The liquid fills the canvas. Streaks fade on their own layer.
+      // The liquid fills the canvas. Dye streaks fade on their own layer.
       const sx = width / NX;
       const sy = height / NY;
       const main = ctx;
@@ -230,33 +233,82 @@ function create(): SimInstance {
       }
       const tctx = trail.getContext('2d')!;
       tctx.setTransform(main.getTransform());
-      tctx.fillStyle = 'rgba(11, 18, 32, 0.18)';
+      tctx.fillStyle = 'rgba(11, 18, 32, 0.14)';
       tctx.fillRect(0, 0, width, height);
-      tctx.lineWidth = 2.5;
-      for (const t of tracers) {
-        t.px = t.x;
-        t.py = t.y;
-        for (let k = 0; k < Math.max(1, steps); k++) {
-          const [u, v] = fluid.velocityAt(t.x, t.y);
-          t.x += u;
-          t.y += v;
-        }
-        t.age++;
-        if (t.x > NX - 2 || t.x < 1 || t.y < 1 || t.y > NY - 2 || t.age > 500) {
-          spawn(t);
-          if (along > 0.05 && Math.random() < 0.6) t.x = t.px = 1 + Math.random() * 3;
-          continue;
-        }
-        tctx.strokeStyle = KIND_COLOR[regimes.kind[Math.floor(t.x) + Math.floor(t.y) * NX]];
+      tctx.lineWidth = 2;
+      for (let kind = 0; kind < 3; kind++) {
+        tctx.strokeStyle = FIELD_COLOR[kind];
         tctx.beginPath();
-        tctx.moveTo(t.px * sx, t.py * sy);
-        tctx.lineTo(t.x * sx + (t.x - t.px) * sx * 2, t.y * sy + (t.y - t.py) * sy * 2);
+        for (const m of motes) {
+          if (kind === 0) {
+            m.px = m.x;
+            m.py = m.y;
+            for (let k = 0; k < Math.max(1, steps); k++) {
+              const [u, v] = fluid.velocityAt(m.x, m.y);
+              m.x += u;
+              m.y += v;
+            }
+            if (++m.age > 400 || m.x < 1 || m.x > NX - 2 || m.y < 1 || m.y > NY - 2) {
+              m.x = m.px = 1 + Math.random() * (NX - 3);
+              m.y = m.py = 1 + Math.random() * (NY - 3);
+              m.age = 0;
+            }
+          }
+          if (regimes.kind[Math.floor(m.x) + Math.floor(m.y) * NX] !== kind) continue;
+          tctx.moveTo(m.px * sx, m.py * sy);
+          tctx.lineTo(m.x * sx + (m.x - m.px) * sx, m.y * sy + (m.y - m.py) * sy);
+        }
+        tctx.stroke();
+      }
+      tctx.lineWidth = 3;
+      // Batch the streaks by color: intact dye in the conduit, held in segments, scattered by packs.
+      const batches: [string, number][] = [
+        [CYAN, -1],
+        ['rgba(0, 174, 239, 0.45)', 0],
+        [YELLOW, CELLS],
+        [MAGENTA, EDDIES],
+      ];
+      for (const [color, kind] of batches) {
+        tctx.strokeStyle = color;
+        tctx.beginPath();
+        for (let i = 0; i < dye.count; i++) {
+          const intact = dye.intact[i] === 1;
+          if (kind === -1 ? !intact : intact || regimes.kind[Math.floor(dye.x[i]) + Math.floor(dye.y[i]) * NX] !== kind) continue;
+          const x0 = dye.px[i] * sx;
+          const y0 = dye.py[i] * sy;
+          const x1 = dye.x[i] * sx;
+          const y1 = dye.y[i] * sy;
+          if (Math.abs(x1 - x0) > width / 4) continue;
+          tctx.moveTo(x0, y0);
+          tctx.lineTo(x1 + (x1 - x0) * 0.5, y1 + (y1 - y0) * 0.5);
+        }
         tctx.stroke();
       }
       main.save();
       main.setTransform(1, 0, 0, 1, 0, 0);
       main.drawImage(trail, 0, 0);
       main.restore();
+
+      // The sources, and the conduit's front in each lane: how far the flow gets intact.
+      ctx.fillStyle = INK;
+      for (const s of dye.sources) {
+        ctx.beginPath();
+        ctx.arc(4, s * sy, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (mode !== 'nonstate' && mode !== 'nomad') {
+        ctx.strokeStyle = CYAN;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        for (let k = 0; k < fronts.length; k++) {
+          if (fronts[k] < 4) continue;
+          const fx = fronts[k] * sx;
+          ctx.moveTo(fx, (dye.sources[k] - 0.8) * sy);
+          ctx.lineTo(fx, (dye.sources[k] + 0.8) * sy);
+        }
+        ctx.stroke();
+      }
+
       // The heat from below, as a soft glow along the bottom edge, brighter where a heater surges.
       const glowH = sy * 4;
       for (let x = 0; x < NX; x += 2) {
@@ -273,19 +325,22 @@ function create(): SimInstance {
         let cap = MODE_CAPTION[mode] ?? null;
         if (mode === 'conflict') {
           captionAge++;
-          const n = history.layers.length;
+          const n = history.reach.length;
           if (captionAge > PHASE_HOLD && n > TREND) {
-            const series = [history.layers, history.cells, history.eddies];
+            const series = [history.reach, history.held, history.scattered];
             const delta = series.map((s) => s[n - 1] - s[n - 1 - TREND]);
             const gainer = delta.indexOf(Math.max(...delta));
             const loser = delta.indexOf(Math.min(...delta));
-            const leader = fr.indexOf(Math.max(...fr));
             const next =
-              delta[gainer] > 0.08 && gainer !== loser
+              delta[gainer] > 0.15 && gainer !== loser
                 ? GAINS[gainer][loser]
-                : fr[leader] > 0.5
-                  ? HOLDING[leader]
-                  : MIXTURE;
+                : stakes.reach > 0.7
+                  ? HOLDING[0]
+                  : stakes.held > 0.45
+                    ? HOLDING[1]
+                    : stakes.scattered > 0.5
+                      ? HOLDING[2]
+                      : MIXTURE;
             if (next !== caption) {
               caption = next;
               captionAge = 0;
@@ -297,9 +352,9 @@ function create(): SimInstance {
           ? {
               ...cap,
               series: [
-                { values: history.layers, color: CYAN, label: 'conduits' },
-                { values: history.cells, color: YELLOW, label: 'circles' },
-                { values: history.eddies, color: MAGENTA, label: 'vortices' },
+                { values: history.reach, color: CYAN, label: 'drafted to the works' },
+                { values: history.held, color: YELLOW, label: 'kept by the bands' },
+                { values: history.scattered, color: MAGENTA, label: 'roaming in packs' },
                 { values: history.heat, color: WARM, label: 'upswell' },
               ],
               span: SPAN,
@@ -307,7 +362,7 @@ function create(): SimInstance {
           : null;
       }
 
-      // Explain layer: one tag on a live example of each regime, followed as it drifts.
+      // Explain layer: the conduit's front, a segment, and a pack, each followed as it moves.
       if (f.explain) {
         beginTags();
         const bounds = { width, height };
@@ -326,38 +381,46 @@ function create(): SimInstance {
           }
           return n ? c / n : 0;
         };
-        const kindAt = (a: { x: number; y: number }) => regimes!.kind[Math.floor(a.x) + Math.floor(a.y) * NX];
         // New tags go on the upper part of the canvas, clear of the legend at the bottom left.
         const pick = (kind: number) => () => {
           for (let tries = 0; tries < 200; tries++) {
-            const a = { x: 6 + Math.random() * (NX - 12), y: 3 + Math.random() * (NY * 0.55) };
-            if (kindAt(a) === kind && share(a, kind) > 0.7) return { anchor: a, x: a.x * sx, y: a.y * sy };
+            const a = { x: 10 + Math.random() * (NX - 20), y: 3 + Math.random() * (NY * 0.55) };
+            if (share(a, kind) > 0.7) return { anchor: a, x: a.x * sx, y: a.y * sy };
           }
           return null;
         };
-        const follow = (kind: number) => (a: { x: number; y: number }) => {
-          const [u, v] = fluid!.velocityAt(a.x, a.y);
-          a.x += u * Math.max(1, steps) * 0.5;
-          a.y += v * Math.max(1, steps) * 0.5;
-          if (a.x < 3 || a.x > NX - 3 || a.y < 2 || a.y > NY - 2) return null;
-          return share(a, kind) > 0.35 ? { x: a.x * sx, y: a.y * sy } : null;
-        };
-        // Each mode tags only the processes it stages.
         if (mode === 'conflict' || mode === 'state') {
-          tags.layers.update(follow(LAYERS), pick(LAYERS));
-          tags.layers.draw(ctx, 'CAPTURE · striation: conduits “constrain movement to go from one point to another” (363)', CYAN, bounds, 'CAPTURE · this conduit broke, and turbulence escaped it');
+          // The conduit's front in the lane that reaches farthest.
+          tags.conduit.update(
+            (k) => (fronts[k] > 12 ? { x: fronts[k] * sx, y: dye!.sources[k] * sy } : null),
+            () => {
+              // The upper lanes only, clear of the legend at the bottom left.
+              let best = 0;
+              for (let k = 1; k < Math.ceil(fronts.length * 0.6); k++) if (fronts[k] > fronts[best]) best = k;
+              return fronts[best] > 12 ? { anchor: best, x: fronts[best] * sx, y: dye!.sources[best] * sy } : null;
+            },
+          );
+          tags.conduit.draw(ctx, 'CAPTURE · the draft’s front: labor marched from the villages toward the State’s works', CYAN, bounds, 'CAPTURE · the draft is cut short, and labor no longer reaches the works');
         }
         if (mode === 'conflict' || mode === 'nonstate') {
-          tags.cells.update(follow(CELLS), pick(CELLS));
-          tags.cells.draw(ctx, 'WARDING OFF · segmentarity: “the circles are not concentric” (433)', YELLOW, bounds, 'WARDING OFF · this circle was swept into a conduit or a vortex');
+          // A segment barely drifts, so its tag stays put while the circle lasts.
+          tags.segment.update((a) => (share(a, CELLS) > 0.35 ? { x: a.x * sx, y: a.y * sy } : null), pick(CELLS));
+          tags.segment.draw(ctx, 'WARDING OFF · a segment: a band keeping its work in its own circle, owing none to a center', YELLOW, bounds, 'WARDING OFF · this band broke open');
         }
         if (mode === 'conflict' || mode === 'nomad') {
-          tags.eddies.update(follow(EDDIES), pick(EDDIES));
-          tags.eddies.draw(ctx, 'WAR MACHINE · the vortical model: a movement “that holds space” (363)', MAGENTA, bounds, 'WAR MACHINE · this vortex settled');
+          tags.pack.update((a) => {
+            const [u, v] = fluid!.velocityAt(a.x, a.y);
+            a.x += u * Math.max(1, steps) * 0.5;
+            a.y += v * Math.max(1, steps) * 0.5;
+            if (a.x < 3 || a.x > NX - 3 || a.y < 2 || a.y > NY - 2) return null;
+            return share(a, EDDIES) > 0.35 ? { x: a.x * sx, y: a.y * sy } : null;
+          }, pick(EDDIES));
+          tags.pack.draw(ctx, 'WAR MACHINE · a pack: journeymen roaming from site to site, off every assigned channel', MAGENTA, bounds, 'WAR MACHINE · this pack settled');
         }
+        drawTag(ctx, 4, dye.sources[0] * sy, 'the sources: the villages labor is drawn from', INK, bounds);
         if (mode !== 'state' && !even && floorMax > floorMean * 1.4) {
           const hx = floor.indexOf(floorMax);
-          drawTag(ctx, hx * sx, height - sy, 'the upswell: “a rhythm without measure” (364)', WARM, bounds);
+          drawTag(ctx, hx * sx, height - sy, 'the upswell: labor moving on its own, “a rhythm without measure”', WARM, bounds);
         }
       }
     },
@@ -375,18 +438,18 @@ export const hydraulic: ModelDef = {
   sidebarIcon: Droplets,
   headerIcon: Droplets,
   title: 'Hydraulic Metaphysics',
-  subtitle: 'A Liquid World // Conduits, Circles, Vortices',
+  subtitle: 'A Liquid World // Conduit, Segments, Packs',
   frameEvery: 2,
   stillFrames: 700,
   describe: (mode) =>
-    `Hydraulic simulation in ${mode} mode: liquid with a through-flow, heated unevenly from below. Cyan streaks run in conduits (laminar layers, striated space), yellow streaks turn in small segmentary circles (convection cells), magenta streaks are vortices holding smooth space (turbulence).`,
+    `Hydraulic simulation in ${mode} mode: dye released from sources at the left into a liquid with a through-flow, heated unevenly from below. The dye is labor. Cyan dye runs intact in its lane toward the far edge (drafted to the State’s works, laminar flow), yellow dye is held in small circles (kept by the bands, convection cells), magenta dye is scattered through the space (roaming in packs, turbulence).`,
   controls: [
-    { kind: 'slider', key: 'flow', label: 'Through-Flow (capture)', min: 0, max: 0.8, step: 0.02, default: 0.4, tint: 'cyan', format: 'dec2' },
-    { kind: 'slider', key: 'heat', label: 'Heat from Below', min: 0.001, max: 0.012, step: 0.0005, default: 0.0045, tint: 'yellow', format: 'x1000' },
+    { kind: 'slider', key: 'flow', label: 'Through-Flow (the draft)', min: 0, max: 0.8, step: 0.02, default: 0.4, tint: 'cyan', format: 'dec2' },
+    { kind: 'slider', key: 'heat', label: 'Heat from Below (upswell)', min: 0.001, max: 0.012, step: 0.0005, default: 0.0045, tint: 'yellow', format: 'x1000' },
     { kind: 'slider', key: 'surge', label: 'Surges (unevenness)', min: 0, max: 2, step: 0.1, default: 1.2, tint: 'magenta', format: 'dec2' },
     { kind: 'slider', key: 'pace', label: 'Surge Pace', min: 0.0005, max: 0.006, step: 0.0005, default: 0.002, tint: 'magenta', format: 'x1000' },
     { kind: 'slider', key: 'wander', label: 'Heaters Wander', min: 0, max: 3, step: 0.25, default: 1, tint: 'magenta', format: 'dec2' },
-    { kind: 'slider', key: 'tracers', label: 'Streaks', min: 500, max: 4000, step: 250, default: 2400, tint: 'ink', format: 'int', reinit: true },
+    { kind: 'slider', key: 'dye', label: 'Dye per Source', min: 0.1, max: 1, step: 0.05, default: 0.4, tint: 'ink', format: 'dec2' },
     { kind: 'slider', key: 'speed', label: 'Steps per Snapshot', min: 0.5, max: 4, step: 0.5, default: 2, tint: 'ink', format: 'dec2', divider: true },
   ],
   status: (p) => [
@@ -394,15 +457,16 @@ export const hydraulic: ModelDef = {
     ['Heat', (p.heat * 1000).toFixed(1)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / Capture', text: 'Conduits. The through-flow channels the liquid into parallel layers, movement from point to point in striated space (laminar flow). ATP: the State subordinates hydraulic force “to conduits, pipes, embankments, which prevent turbulence” (363).' },
-    { process: 'warMachine', heading: '02 / War machine', text: 'Vortices. When the heat surges, a swerve grows into vortices that hold the whole space (turbulence). ATP: “From turba to turbo” (361), a movement “distributed by turbulence across a smooth space” (363).' },
-    { process: 'wardingOff', heading: '03 / Warding off', text: 'Circles. Heat from below breaks the conduits into small, equal circles, each on its own ground, none central (convection cells). ATP: war “maintains the dispersal and segmentarity of groups” (357), and “the circles are not concentric” (433).' },
+    { process: 'capture', heading: '01 / Capture', text: 'The conduit. The State’s draft carries labor from the villages toward its works in assigned channels, and the cyan ticks mark how far it reaches (laminar flow). The State is forever “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Packs. When the upswell surges, labor slips its channels and roams in packs across the whole space, as the journeymen’s compagnonnages did (turbulence). “From turba to turbo” (Plateaus: 361), a movement “distributed by turbulence across a smooth space” (363).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Segments. Bands keep their work in small circles of their own ahead of the conduit’s front, and the draft cannot get through (convection cells). War “maintains the dispersal and segmentarity of groups” (Plateaus: 357), and “the circles are not concentric” (433).' },
   ],
   legend: [
-    { swatch: CYAN, see: 'Cyan streaks', social: 'striated space: flows of people, goods, and labor in conduits, point to point', physics: 'laminar flow, vertical motion small next to the flow along', atp: 'conduits “constrain movement to go from one point to another” (363)' },
-    { swatch: YELLOW, see: 'Yellow streaks', social: 'segmentarity: small groups, each on its own ground, none central', physics: 'steady convection cells (Rayleigh-Bénard), each roll turning in place', atp: 'war “maintains the dispersal and segmentarity of groups” (357), and “the circles are not concentric” (433)' },
-    { swatch: MAGENTA, see: 'Magenta streaks', social: 'smooth space: vortices, a movement that holds space instead of being held by it', physics: 'turbulence: vertical motion that keeps changing', atp: '“From turba to turbo” (361), “distributed by turbulence across a smooth space” (363)' },
-    { swatch: WARM, see: 'Glow along the bottom', social: 'the upswell: unrest rising from below, uneven in place and time', physics: 'heaters under the floor that drift and surge on their own; the through-flow enters at the left and wavers', atp: '“a rhythm without measure, which relates to the upswell of a flow” (364)' },
+    { swatch: CYAN, see: 'Cyan dye and cyan ticks', social: 'labor drafted along the State’s channels, from the villages to its works, by corvée and by guild, the ticks marking how far the draft reaches', physics: 'laminar flow, each source’s dye staying in its lane (Reynolds 1883)', atp: 'the State “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368)', example: 'the corvée gangs on an empire’s canals (cf. Wittfogel, 363)' },
+    { swatch: YELLOW, see: 'Yellow dye', social: 'bands that keep their work in their own circles, sharing it out, none owing labor to a center', physics: 'dye held in steady convection cells (Rayleigh-Bénard)', atp: 'war “maintains the dispersal and segmentarity of groups” (Plateaus: 357)', example: 'a band whose members “disperse to eat or sleep separately,” so no leader gains stable power (358)' },
+    { swatch: MAGENTA, see: 'Magenta dye', social: 'journeymen and nomads roaming from site to site, off every channel the State assigns', physics: 'dye scattered by turbulence', atp: '“From turba to turbo” (Plateaus: 361)', example: 'the compagnonnages of masons, carpenters, and smiths, “the nomadic or itinerant bodies” States have always had trouble with (368)' },
+    { swatch: INK, see: 'White dots at the left', social: 'the villages labor is drawn from', physics: 'dye injected at fixed heights', atp: 'movement “from one specified point to another” (Plateaus: 363)' },
+    { swatch: WARM, see: 'Glow along the bottom', social: 'the upswell: labor moving on its own account, uneven in place and time', physics: 'heaters under the floor that drift and surge on their own, while the through-flow wavers', atp: '“a rhythm without measure, which relates to the upswell of a flow” (Plateaus: 364)' },
   ],
   create,
 };

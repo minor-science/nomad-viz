@@ -44,7 +44,7 @@ for (const [model, s] of Object.entries(models)) {
   }
   const prose = [s.summary, s.code, ...s.divergences.map((d) => d.text)];
   for (const text of prose) {
-    for (const m of text.matchAll(/“([^”]+)”[^“(]{0,60}\((\d{3})(?:[-,][^)]*)?\)/g)) {
+    for (const m of text.matchAll(/“([^”]+)”[^“(]{0,60}\((?:Plateaus: )?(\d{3})(?:[-,][^)]*)?\)/g)) {
       check(model, parseInt(m[2], 10), m[1], 'inline ');
     }
   }
@@ -55,7 +55,7 @@ const root = new URL('../src/', import.meta.url).pathname;
 const files = [...readdirSync(root + 'models').map((f) => 'models/' + f), 'App.tsx'];
 for (const f of files) {
   const text = readFileSync(root + f, 'utf8');
-  for (const m of text.matchAll(/“([^”]+)”[^“(]{0,60}\((\d{3})(?:[-,][^)]*)?\)/g)) {
+  for (const m of text.matchAll(/“([^”]+)”[^“(]{0,60}\((?:Plateaus: )?(\d{3})(?:[-,][^)]*)?\)/g)) {
     check(f, parseInt(m[2], 10), m[1], 'inline ');
   }
 }
