@@ -1,0 +1,17 @@
+Text, sources, and explanatory content
+
+The written content of the Nomadology Visualizer (the explanatory text, the
+sources panels, and the files under src/content/ and docs/) is copyright 2026
+Andrew Culp and is licensed under the Creative Commons Attribution 4.0
+International License (CC BY 4.0).
+
+You may share and adapt it for any purpose, provided you give appropriate
+credit, link to the license, and indicate if changes were made.
+
+Full license: https://creativecommons.org/licenses/by/4.0/legalcode
+
+Quotations from A Thousand Plateaus and other works remain under their
+publishers' copyright and are quoted for scholarly purposes. They are not
+covered by this license.
+
+The source code is licensed separately under the Apache License 2.0 (see LICENSE).

@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use or discuss this software, please cite it as below."
+title: "Nomadology Visualizer"
+type: software
+authors:
+  - family-names: Culp
+    given-names: Andrew
+version: 0.1.0
+license: Apache-2.0
+repository-code: "https://github.com/minor-science/nomad-viz"
+abstract: >-
+  Interactive physical models of the machinic processes in Gilles Deleuze and
+  Félix Guattari's A Thousand Plateaus (capture, the war machine, warding off,
+  and others). Each model separates what Deleuze and Guattari write, the
+  sources they borrow from, and what the physics actually says.
+keywords:
+  - Deleuze
+  - Guattari
+  - nomadology
+  - A Thousand Plateaus
+  - smooth and striated space
+  - visualization

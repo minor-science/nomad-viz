@@ -1,6 +1,7 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
+ * Copyright 2026 Andrew Culp
  */
 
 import { useState } from 'react';
