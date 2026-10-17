@@ -333,7 +333,10 @@ function create(): SimInstance {
         if (mode === 'conflict') {
           captionAge++;
           const n = history.reach.length;
-          if (captionAge > PHASE_HOLD && n > TREND) {
+          // A caption whose process has nearly vanished may change sooner, so it never contradicts the field.
+          const shown = caption === MIXTURE ? -1 : HOLDING.includes(caption) ? HOLDING.indexOf(caption) : GAINS.findIndex((row) => row.includes(caption));
+          const stale = shown >= 0 && [stakes.reach, stakes.held, stakes.scattered][shown] < 0.25;
+          if ((captionAge > PHASE_HOLD || (stale && captionAge > 60)) && n > TREND) {
             const series = [history.reach, history.held, history.scattered];
             const delta = series.map((s) => s[n - 1] - s[n - 1 - TREND]);
             const gainer = delta.indexOf(Math.max(...delta));

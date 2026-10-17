@@ -233,7 +233,10 @@ function create(): SimInstance {
         if (mode === 'conflict') {
           captionAge++;
           const m = history.R.length;
-          if (captionAge > PHASE_HOLD && m > TREND) {
+          // A caption whose process has nearly vanished may change sooner, so it never contradicts the field.
+          const shown = caption === MIXTURE ? -1 : HOLDING.includes(caption) ? HOLDING.indexOf(caption) : GAINS.findIndex((row) => row.includes(caption));
+          const stale = shown >= 0 && [field.R, fractions[SEGMENT], fractions[WAVE]][shown] < 0.25;
+          if ((captionAge > PHASE_HOLD || (stale && captionAge > 60)) && m > TREND) {
             const series = [history.R, history.segment, history.wave];
             const delta = series.map((s) => s[m - 1] - s[m - 1 - TREND]);
             const gainer = delta.indexOf(Math.max(...delta));
