@@ -56,14 +56,14 @@ const PHASES: Record<Phase, { head: string; sub: string; color: string }> = {
     color: '#00aeef',
   },
   warding: {
-    head: 'WARDING OFF · The bands mobilize and wear down the stock, destroying what a State would keep.',
+    head: 'WARDING OFF · The clans mobilize and wear down the stock, destroying what a State would keep.',
     sub: '“depletion is the means by which primitive groups ward off the stock” (Plateaus: 440).',
     color: '#e0a800',
   },
 };
 const MODE_CAPTION: Partial<Record<Mode, { head: string; sub: string; color: string }>> = {
   state: {
-    head: 'CAPTURE ALONE · With no bands to hold the threshold at a distance, the first stock to form keeps growing.',
+    head: 'CAPTURE ALONE · With no clans to hold the threshold at a distance, the first stock to form keeps growing.',
     sub: 'An apparatus distinct from the social body “crystallizing” (Plateaus: 357).',
     color: '#00aeef',
   },
@@ -73,7 +73,7 @@ const MODE_CAPTION: Partial<Record<Mode, { head: string; sub: string; color: str
     color: '#ec008c',
   },
   nonstate: {
-    head: 'WARDING OFF ALONE · Bands keep every formation from crystallizing, so no stock ever forms.',
+    head: 'WARDING OFF ALONE · Clans keep every formation from crystallizing, so no stock ever forms.',
     sub: '“counter-State societies organizing mechanisms that ward off the State-form” (Plateaus: 429).',
     color: '#e0a800',
   },
@@ -282,7 +282,7 @@ function create(): SimInstance {
             return { anchor: siteOf(big.id), x: (big.cx + 0.5) * sx, y: (big.cy + 0.5) * sy };
           },
         );
-        tags.capture.draw(ctx, 'CAPTURE · a stock, crystallized past the threshold', '#00aeef', bounds, 'CAPTURE · this stock is gone, worn down by bands or carved through by smiths');
+        tags.capture.draw(ctx, 'CAPTURE · a stock, crystallized past the threshold', '#00aeef', bounds, 'CAPTURE · this stock is gone, worn down by clans or carved through by smiths');
         tags.embryo.update(
           (site) => {
             const r = centroid(site);
@@ -309,7 +309,7 @@ function create(): SimInstance {
               return { anchor: kk, x: at(bands!.list[kk].i)[0], y: at(bands!.list[kk].i)[1] };
             },
           );
-          tags.band.draw(ctx, mobilization > 0.05 ? 'WARDING OFF · band, mobilized, wearing down the stock' : 'WARDING OFF · band, blocking growth', '#e0a800', bounds);
+          tags.band.draw(ctx, mobilization > 0.05 ? 'WARDING OFF · clan, mobilized, wearing down the stock' : 'WARDING OFF · clan, blocking growth', '#e0a800', bounds);
         }
         if (smithing && smiths.list.length) {
           tags.smith.update(
@@ -333,7 +333,7 @@ function create(): SimInstance {
       }
       const series: Narration['series'] = [];
       if (mode !== 'nonstate' || solidHistory.some((v) => v > 0)) series.push({ values: solidHistory.map((v) => v / 0.4), color: '#00aeef', label: 'stock' });
-      if (warding) series.push({ values: mobHistory.map((v) => v / Math.max(0.01, params.wearMax)), color: '#e0a800', label: 'bands mobilized' });
+      if (warding) series.push({ values: mobHistory.map((v) => v / Math.max(0.01, params.wearMax)), color: '#e0a800', label: 'clans mobilized' });
       series.push({ values: dmuHistory.map((v) => v / 0.3), color: '#f2f2f2', label: 'surplus pressing' });
       narration = cap ? { ...cap, series, span: HISTORY } : null;
     },
@@ -355,13 +355,13 @@ export const metallurgic: ModelDef = {
   stillFrames: 450,
   frameEvery: 2,
   describe: (mode) =>
-    `Metallurgic simulation: a solution fed with matter on a square lattice, in ${mode} mode. Gray clusters form and dissolve, cyan grains are crystal past the threshold, small yellow dots are bands that ward off the stock, and magenta trails are smiths.`,
+    `Metallurgic simulation: a solution fed with matter on a square lattice, in ${mode} mode. Gray clusters form and dissolve, cyan grains are crystal past the threshold, small yellow dots are clans that ward off the stock, and magenta trails are smiths.`,
   controls: [
     { kind: 'slider', key: 'supersaturation', label: 'Starting Supersaturation Δμ', min: 0.04, max: 0.3, step: 0.01, default: 0.12, tint: 'cyan', format: 'dec2', reinit: true },
     { kind: 'slider', key: 'temperature', label: 'Temperature T', min: 0.3, max: 0.5, step: 0.01, default: 0.38, tint: 'cyan', format: 'dec2' },
     { kind: 'slider', key: 'feed', label: 'Matter-Flow (atoms per sweep)', min: 0, max: 30, step: 1, default: 10, tint: 'ink', format: 'int' },
     { kind: 'slider', key: 'orientations', label: 'Grain Orientations', min: 1, max: 12, step: 1, default: 6, tint: 'cyan', format: 'int' },
-    { kind: 'slider', key: 'bands', label: 'Bands', min: 0, max: 300, step: 10, default: 120, tint: 'yellow', format: 'int' },
+    { kind: 'slider', key: 'bands', label: 'Clans', min: 0, max: 300, step: 10, default: 120, tint: 'yellow', format: 'int' },
     { kind: 'slider', key: 'wearMax', label: 'Depletion Strength (max)', min: 0, max: 1, step: 0.05, default: 1, tint: 'yellow', format: 'pct' },
     { kind: 'slider', key: 'alarm', label: 'Mobilize Above (solid)', min: 0.02, max: 0.4, step: 0.01, default: 0.15, tint: 'yellow', format: 'pct' },
     { kind: 'slider', key: 'calm', label: 'Relax Below (solid)', min: 0, max: 0.2, step: 0.01, default: 0.03, tint: 'yellow', format: 'pct' },
@@ -372,12 +372,12 @@ export const metallurgic: ModelDef = {
   ],
   status: (p) => [
     ['Flow', String(p.feed)],
-    ['Bands', String(p.bands)],
+    ['Clans', String(p.bands)],
   ],
   cards: [
     { process: 'capture', heading: '01 / Capture', text: 'Nucleation: clusters form and dissolve until one crosses the threshold and grows into cyan grains, drawing down the solution that feeds it. Plateaus speaks of an apparatus “crystallizing” (357).' },
     { process: 'warMachine', heading: '02 / War machine', text: 'Smiths: magenta trails follow the grain boundaries and carve holes through the solid, returning matter to the flow. Smiths are itinerants who “follow the matter-flow” (Plateaus: 412) and make holey space (413-15).' },
-    { process: 'wardingOff', heading: '03 / Warding off', text: 'Bands: many small agents settle on clusters and block their growth, then mobilize as the stock grows and wear down the stock, since “depletion is the means by which primitive groups ward off the stock” (Plateaus: 440).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Clans: many small agents settle on clusters and block their growth, then mobilize as the stock grows and wear down the stock, since “depletion is the means by which primitive groups ward off the stock” (Plateaus: 440).' },
   ],
   legend: [
     { swatch: '#64748b', see: 'Gray clusters', social: 'a nascent hierarchy, prestige that might harden into power', physics: 'nuclei below the critical size, which mostly dissolve', atp: 'formations of power kept from “taking on consistency” (Plateaus: 433)', example: 'Clastres’s chiefs, who speak but cannot command' },
