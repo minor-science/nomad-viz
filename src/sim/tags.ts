@@ -47,6 +47,7 @@ export function drawTag(
   let lx = x + 28;
   let ly = y - 46;
   if (lx + w > bounds.width - 8) lx = x - 28 - w;
+  lx = Math.max(8, Math.min(lx, bounds.width - 8 - w));
   if (ly < 8) ly = y + 22;
   for (let k = 0; k < 8 && overlaps({ x: lx, y: ly, w, h }); k++) {
     ly += h + 8;

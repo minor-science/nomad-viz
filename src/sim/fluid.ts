@@ -282,11 +282,13 @@ export class Fluid {
   /**
    * Heat and buoyancy (the Boussinesq approximation): temperature is carried by the flow and
    * conducts (diffusivity kappa); warm liquid rises with a force proportional to how much warmer it
-   * is than the middle. The floor is held at `hot`, the ceiling at 0, and liquid enters at the left
-   * with the conduction profile between them. Call before step().
+   * is than `ref`. The floor is held at `hot` (one value, or one per column for uneven heating), the
+   * ceiling at 0, and liquid enters at the left with the conduction profile between them. Call
+   * before step().
    */
-  stepThermal(hot: number, kappa: number, buoyancy: number) {
+  stepThermal(hot: number | Float32Array, kappa: number, buoyancy: number, ref?: number) {
     const { nx, ny, u, v, temp, temp0, solid } = this;
+    const floor = (x: number) => (typeof hot === 'number' ? hot : hot[x]);
     temp0.set(temp);
     // Carry heat with the flow (semi-Lagrangian), then conduct it (explicit).
     for (let y = 1; y < ny - 1; y++) {
@@ -307,14 +309,14 @@ export class Fluid {
     // Boundaries: hot floor, cold ceiling, conduction profile at the inlet, zero gradient at the outlet.
     for (let x = 0; x < nx; x++) {
       temp[x] = 0;
-      temp[x + (ny - 1) * nx] = hot;
+      temp[x + (ny - 1) * nx] = floor(x);
     }
     for (let y = 0; y < ny; y++) {
-      temp[y * nx] = (hot * y) / (ny - 1);
+      temp[y * nx] = (floor(0) * y) / (ny - 1);
       temp[nx - 1 + y * nx] = temp[nx - 2 + y * nx];
     }
     // Buoyancy: rows count downward, so warmer liquid gets a negative (upward) push.
-    const mid = hot / 2;
+    const mid = ref ?? (typeof hot === 'number' ? hot : hot.reduce((a, b) => a + b, 0) / nx) / 2;
     for (let i = 0; i < this.n; i++) {
       if (!solid[i]) v[i] -= buoyancy * (temp[i] - mid);
     }
