@@ -49,8 +49,8 @@ Two rhythms on screen at once, as in 364. Capture keeps measured time: convoys l
 - Real: the currents and eddies (the fluid solver), and vessels that move by their own speed through the water plus the current's drift. Convoys must steer against the drift to hold a lane, while the fleet rides it.
 - Ours: the rates at which grids, lanes, fleets, and circuits respond to each other, and warding off as a whole. The Sources panel would say so line by line.
 
-## Open points for Jo
+## Decisions (Jo, Oct 17, 2026)
 
-1. Warding off as coastal circuits (proposed), braided channels, or left out of this model.
-2. Whether to stage ATP's further twist, in which the State takes over the fleet in being itself, smooth space reconstituted "for the purpose of controlling striated space more completely" (480). It could be a later phase.
-3. Narrator vocabulary: chart terms (lanes, grid, convoys) or the social terms we used before (routes, flows of goods and people).
+1. Warding off: the coastal circuits, kept as simple and as clear as possible. Nothing that muddies the image of thought.
+2. The State taking over the fleet in being: not now.
+3. Narrator: social terms first, with brief chart terms where they help (for example, "fixes routes (lanes)").
