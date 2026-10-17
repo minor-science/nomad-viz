@@ -39,4 +39,9 @@ export const BIBLIOGRAPHY: Record<string, Work> = {
   selle: { cite: 'Selle, Andrew, Ronald Fedkiw, ByungMoon Kim, Yingjie Liu, and Jarek Rossignac. “An Unconditionally Stable MacCormack Method.” Journal of Scientific Computing 35 (2008): 350-71.' },
   shields: { cite: 'Shields, Albert. Anwendung der Ähnlichkeitsmechanik und der Turbulenzforschung auf die Geschiebebewegung. Berlin: Preussische Versuchsanstalt für Wasserbau und Schiffbau, 1936.' },
   stam: { cite: 'Stam, Jos. “Stable Fluids.” Proceedings of SIGGRAPH 1999: 121-28.' },
+  benard: { cite: 'Bénard, Henri. “Les tourbillons cellulaires dans une nappe liquide.” Revue générale des sciences pures et appliquées 11 (1900): 1261-71, 1309-28.' },
+  rayleigh: { cite: 'Rayleigh, Lord (John William Strutt). “On Convection Currents in a Horizontal Layer of Fluid, When the Higher Temperature Is on the Under Side.” Philosophical Magazine, 6th ser., 32 (1916): 529-46.' },
+  uhlenbeck: { cite: 'Uhlenbeck, G. E., and L. S. Ornstein. “On the Theory of the Brownian Motion.” Physical Review 36 (1930): 823-41.' },
+  meunier: { short: 'Meunier 1977', cite: 'Meunier, Jacques. Les gamins de Bogota. Paris: Lattès, 1977. (As cited in Plateaus.)', atp: '553 n. 13' },
+  querrien: { short: 'Querrien', cite: 'Querrien, Anne. Devenir fonctionnaire ou le travail de l’État. Paris: Cerfi, n.d. (As cited in Plateaus.)', atp: '554 n. 26' },
 };
