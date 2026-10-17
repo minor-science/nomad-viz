@@ -36,6 +36,9 @@ export class Fluid {
   private div: Float32Array;
   readonly curl: Float32Array;
   readonly solid: Uint8Array;
+  /** Temperature, 0 (cold) to 1 (hot), for convection; see stepThermal. */
+  readonly temp: Float32Array;
+  private temp0: Float32Array;
   private rand: () => number;
   private ut: Float32Array | null = null;
   private vt: Float32Array | null = null;
@@ -55,6 +58,8 @@ export class Fluid {
     this.div = new Float32Array(this.n);
     this.curl = new Float32Array(this.n);
     this.solid = new Uint8Array(this.n);
+    this.temp = new Float32Array(this.n);
+    this.temp0 = new Float32Array(this.n);
     this.rand = rand;
     this.setSolid(() => false);
   }
@@ -272,6 +277,47 @@ export class Fluid {
     this.project();
     this.boundaries(this.u, this.v, p);
     this.computeCurl();
+  }
+
+  /**
+   * Heat and buoyancy (the Boussinesq approximation): temperature is carried by the flow and
+   * conducts (diffusivity kappa); warm liquid rises with a force proportional to how much warmer it
+   * is than the middle. The floor is held at `hot`, the ceiling at 0, and liquid enters at the left
+   * with the conduction profile between them. Call before step().
+   */
+  stepThermal(hot: number, kappa: number, buoyancy: number) {
+    const { nx, ny, u, v, temp, temp0, solid } = this;
+    temp0.set(temp);
+    // Carry heat with the flow (semi-Lagrangian), then conduct it (explicit).
+    for (let y = 1; y < ny - 1; y++) {
+      for (let x = 1; x < nx - 1; x++) {
+        const i = x + y * nx;
+        if (solid[i]) continue;
+        temp[i] = this.sample(temp0, x - u[i], y - v[i]);
+      }
+    }
+    temp0.set(temp);
+    for (let y = 1; y < ny - 1; y++) {
+      for (let x = 1; x < nx - 1; x++) {
+        const i = x + y * nx;
+        if (solid[i]) continue;
+        temp[i] = temp0[i] + kappa * (temp0[i - 1] + temp0[i + 1] + temp0[i - nx] + temp0[i + nx] - 4 * temp0[i]);
+      }
+    }
+    // Boundaries: hot floor, cold ceiling, conduction profile at the inlet, zero gradient at the outlet.
+    for (let x = 0; x < nx; x++) {
+      temp[x] = 0;
+      temp[x + (ny - 1) * nx] = hot;
+    }
+    for (let y = 0; y < ny; y++) {
+      temp[y * nx] = (hot * y) / (ny - 1);
+      temp[nx - 1 + y * nx] = temp[nx - 2 + y * nx];
+    }
+    // Buoyancy: rows count downward, so warmer liquid gets a negative (upward) push.
+    const mid = hot / 2;
+    for (let i = 0; i < this.n; i++) {
+      if (!solid[i]) v[i] -= buoyancy * (temp[i] - mid);
+    }
   }
 
   /** Mean absolute cross-stream velocity over the right half: a rough measure of turbulence. */
