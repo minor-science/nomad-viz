@@ -25,9 +25,20 @@ export interface Frame {
   explain: boolean;
 }
 
+// What the narrator strip shows: a headline, an ATP line, and a chart of series scaled 0 to 1.
+export interface Narration {
+  head: string;
+  sub: string;
+  color: string;
+  series: { values: number[]; color: string; label: string }[];
+  span: number;
+}
+
 export interface SimInstance {
   init(width: number, height: number, params: Params): void;
   frame(ctx: CanvasRenderingContext2D, f: Frame): void;
+  /** The narrator's current text and chart, read by the shell a few times a second. */
+  narrate?(): Narration | null;
 }
 
 export type Tint = 'magenta' | 'cyan' | 'yellow' | 'green' | 'ink';

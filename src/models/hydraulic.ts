@@ -1,8 +1,8 @@
 import { Droplets } from 'lucide-react';
-import type { ModelDef, SimInstance, Frame, Mode, Params } from '../sim/types';
+import type { ModelDef, SimInstance, Frame, Mode, Narration, Params } from '../sim/types';
 import { Fluid, type FluidParams } from '../sim/fluid';
 import { Embankments } from '../sim/embankments';
-import { beginTags, drawPanel, drawPlace, drawTag, StickyTag, type Series } from '../sim/tags';
+import { beginTags, drawPlace, drawTag, StickyTag } from '../sim/tags';
 
 // Grid height in cells. The width follows the canvas's aspect ratio.
 const NY = 72;
@@ -118,6 +118,7 @@ function create(): SimInstance {
   let lastParams: FluidParams = { nu: 0, uTop: 1, uBottom: 0, clinamen: 0, confinement: 0 };
   const vortexTag = new StickyTag<{ x: number; y: number }>(300);
   let phase: Phase = 'regulated';
+  let narration: Narration | null = null;
   const history = { held: [] as number[], off: [] as number[], surge: [] as number[] };
   const SPAN = 600;
   let phaseAge = 0;
@@ -315,6 +316,32 @@ function create(): SimInstance {
       main.drawImage(trail, 0, 0);
       main.restore();
 
+      // Narration, read by the shell for the strip above the canvas.
+      {
+        // Narration: in conflict, the phase of the cycle, held for a few seconds at a time.
+        let cap = MODE_CAPTION[mode] ?? null;
+        if (mode === 'conflict') {
+          const want: Phase =
+            standing > 0.85 && season > 0.25 ? 'surge'
+            : standing <= 0.85 && season > -0.2 ? 'breakdown'
+            : standing < 0.97 ? 'recapture'
+            : 'regulated';
+          phaseAge++;
+          if (want !== phase && phaseAge > (phase === 'breakdown' && standing > 0.95 ? PHASE_HOLD / 3 : PHASE_HOLD)) {
+            phase = want;
+            phaseAge = 0;
+          }
+          cap = PHASES[phase];
+        }
+        if (cap) {
+          const series: Narration['series'] = [];
+          if (mode === 'conflict' || mode === 'state') series.push({ values: history.held, color: '#00aeef', label: 'routes held' });
+          series.push({ values: history.off, color: '#ec008c', label: 'flows off-route' });
+          if (mode === 'conflict') series.push({ values: history.surge, color: '#f2f2f2', label: 'surge' });
+          narration = { ...cap, series, span: SPAN };
+        } else narration = null;
+      }
+
       // Explain layer: map labels on the ground, a narrator's caption, and tags that say what each
       // feature stands for.
       if (f.explain) {
@@ -331,28 +358,6 @@ function create(): SimInstance {
         if (mode === 'conflict') {
           place(BANKS_END / 2, 0.58, 'THE STATE’S CHANNELS');
           place((TOWN.conflict.entry + TOWN.conflict.exit) / 2, 0.22, 'THE TOWN');
-        }
-        // Narration: in conflict, the phase of the cycle, held for a few seconds at a time.
-        let cap = MODE_CAPTION[mode];
-        if (mode === 'conflict') {
-          const want: Phase =
-            standing > 0.85 && season > 0.25 ? 'surge'
-            : standing <= 0.85 && season > -0.2 ? 'breakdown'
-            : standing < 0.97 ? 'recapture'
-            : 'regulated';
-          phaseAge++;
-          if (want !== phase && phaseAge > (phase === 'breakdown' && standing > 0.95 ? PHASE_HOLD / 3 : PHASE_HOLD)) {
-            phase = want;
-            phaseAge = 0;
-          }
-          cap = PHASES[phase];
-        }
-        if (cap) {
-          const series: Series[] = [];
-          if (mode === 'conflict' || mode === 'state') series.push({ values: history.held, color: '#00aeef', label: 'routes held' });
-          series.push({ values: history.off, color: '#ec008c', label: 'flows off-route' });
-          if (mode === 'conflict') series.push({ values: history.surge, color: '#f2f2f2', label: 'surge' });
-          drawPanel(ctx, 16, 16, Math.min(width - 32, Math.max(640, width * 0.5)), cap.head, cap.sub, cap.color, series, SPAN);
         }
         drawTag(ctx, 6, (ny * 0.25) * sy, 'INFLOW · flows of people, goods, and labor', '#f2f2f2', bounds);
         if (banks && season > 0.5) drawTag(ctx, nx * 0.3 * sx, 3 * sy, 'SURGE · migration and flight beyond what the routes can hold', '#ec008c', bounds);
@@ -424,6 +429,10 @@ function create(): SimInstance {
         }
       }
 
+    },
+
+    narrate() {
+      return narration;
     },
   };
 }

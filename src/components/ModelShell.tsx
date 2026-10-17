@@ -3,7 +3,7 @@ import { Info, List, Pause, Play, RotateCcw, Tags, X } from 'lucide-react';
 import { PROCESS } from '../processes';
 import {
   WORLD_SCALE, DEFAULT_MODES, defaults, formatValue,
-  type ControlSpec, type Mode, type ModelDef, type Params, type Tint,
+  type ControlSpec, type Mode, type ModelDef, type Narration, type Params, type Tint,
 } from '../sim/types';
 import { readMode, readPanel, readParams, setPanel, writeState } from '../sim/url';
 
@@ -49,6 +49,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   const [showControls, setShowControls] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [explain, setExplain] = useState(true);
   const [showLegend, setShowLegend] = useState(true);
+  const [narration, setNarration] = useState<Narration | null>(null);
   const [showTheory, setShowTheory] = useState(() => readPanel() === 'sources');
   const [theoryLoaded, setTheoryLoaded] = useState(() => readPanel() === 'sources');
   const uid = useId();
@@ -155,6 +156,18 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
     reinit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reinitKey]);
+
+  // The narrator strip reads the simulation a few times a second, not every frame.
+  useEffect(() => {
+    if (!sim.narrate) return;
+    const read = () => {
+      const n = sim.narrate!();
+      setNarration(n ? { ...n, series: n.series.map((x) => ({ ...x, values: x.values.slice() })) } : null);
+    };
+    read();
+    const id = window.setInterval(read, 250);
+    return () => window.clearInterval(id);
+  }, [sim]);
 
   useEffect(() => {
     writeState(model.id, mode, params, base);
@@ -303,6 +316,37 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
           </button>
         </div>
       </div>
+
+      {explain && narration && (
+        <div className="flex items-center gap-4 px-3 py-2 border-b-4 border-xerox-ink bg-black text-xerox-bg" style={{ boxShadow: `inset 6px 0 0 ${narration.color}` }} aria-live="polite">
+          <div className="flex-1 min-w-0 pl-2">
+            <p className="text-[11px] md:text-xs font-mono font-black uppercase leading-snug" style={{ color: narration.color }}>{narration.head}</p>
+            <p className="text-[11px] font-sans leading-snug mt-0.5 text-[#d1d5db]">{narration.sub}</p>
+          </div>
+          {narration.series.length > 0 && (
+            <div className="hidden sm:block w-[260px] shrink-0">
+              <svg viewBox="0 0 260 48" preserveAspectRatio="none" className="w-full h-12 border border-[#334155]" aria-hidden="true">
+                {narration.series.map((x) => {
+                  const step = Math.max(1, Math.floor(narration.span / 130));
+                  const pts: string[] = [];
+                  for (let k = 0; k < x.values.length; k += step) {
+                    pts.push(`${((k / Math.max(1, narration.span - 1)) * 260).toFixed(1)},${(46 - Math.max(0, Math.min(1, x.values[k])) * 44).toFixed(1)}`);
+                  }
+                  return <polyline key={x.label} points={pts.join(' ')} fill="none" stroke={x.color} strokeWidth={2} vectorEffect="non-scaling-stroke" />;
+                })}
+              </svg>
+              <div className="flex flex-wrap gap-x-3 mt-1 text-[9px] font-mono uppercase tracking-wider">
+                {narration.series.map((x) => (
+                  <span key={x.label} className="flex items-center gap-1">
+                    <span className="inline-block w-3 h-0.5" style={{ background: x.color }} aria-hidden="true" />
+                    {x.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="relative flex-1 bg-black flex overflow-hidden min-h-0">
         <div ref={wrapRef} className="flex-1 relative overflow-hidden" role="img" aria-label={model.describe(mode)}>

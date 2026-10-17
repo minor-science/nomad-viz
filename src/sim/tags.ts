@@ -5,7 +5,7 @@
 let placed: { x: number; y: number; w: number; h: number }[] = [];
 let shown = new Set<string>();
 
-// A tag's process sets its color, and only one tag per process shows at a time.
+// A tag's process sets its color.
 const PROCESS_COLOR: Record<string, string> = {
   CAPTURE: '#00aeef',
   'WAR MACHINE': '#ec008c',
@@ -34,12 +34,11 @@ export function drawTag(
   color: string,
   bounds: { width: number; height: number },
 ) {
+  // Two tags of the same kind never show at once; different kinds may, even for one process.
+  if (shown.has(text)) return;
+  shown.add(text);
   const kind = text.split(' · ')[0];
-  if (kind in PROCESS_COLOR) {
-    if (shown.has(kind)) return;
-    shown.add(kind);
-    color = PROCESS_COLOR[kind];
-  }
+  if (kind in PROCESS_COLOR) color = PROCESS_COLOR[kind];
   ctx.save();
   ctx.font = 'bold 20px "JetBrains Mono", monospace';
   const w = ctx.measureText(text).width + 16;

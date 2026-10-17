@@ -1,9 +1,9 @@
 import { Anvil, Zap } from 'lucide-react';
-import type { ModelDef, SimInstance, Frame } from '../sim/types';
+import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
 import { LatticeGas, criticalSize, type LatticeParams } from '../sim/latticeGas';
 import { Smiths } from '../sim/smiths';
 import { Bands } from '../sim/bands';
-import { beginTags, reserve, StickyTag } from '../sim/tags';
+import { beginTags, StickyTag } from '../sim/tags';
 
 // Lattice cell, in world units (two per CSS pixel).
 const CELL = 10;
@@ -41,6 +41,46 @@ function grainColor(o: number, Q: number): [number, number, number] {
   return [Math.round(m * 255), Math.round((x + m) * 255), Math.round((c + m) * 255)];
 }
 
+// The narrator. In conflict mode the caption follows the phase of the cycle, held a few seconds at
+// a time; in the other modes it describes the one process staged. Quotations are checked.
+type Phase = 'dispersed' | 'crystallizing' | 'warding';
+const PHASES: Record<Phase, { head: string; sub: string; color: string }> = {
+  dispersed: {
+    head: 'DISPERSED · Power forms and dissolves. Nothing yet holds as a stock.',
+    sub: 'ATP: mechanisms keep central points “from crystallizing, from taking on consistency” (433).',
+    color: '#cbd5e1',
+  },
+  crystallizing: {
+    head: 'CRYSTALLIZING · A stock passes the threshold and grows, drawing down what feeds it.',
+    sub: 'ATP: “The threshold is in fact already there, but outside the limit” (440).',
+    color: '#00aeef',
+  },
+  warding: {
+    head: 'WARDING OFF · The bands mobilize and wear the stock down, destroying rather than keeping.',
+    sub: 'ATP: “depletion is the means by which primitive groups ward off the stock” (440).',
+    color: '#e0a800',
+  },
+};
+const MODE_CAPTION: Partial<Record<Mode, { head: string; sub: string; color: string }>> = {
+  state: {
+    head: 'CAPTURE ALONE · Nothing holds the threshold at a distance. Once a stock forms, it grows.',
+    sub: 'ATP: an apparatus distinct from the social body “crystallizing” (357).',
+    color: '#00aeef',
+  },
+  nomad: {
+    head: 'WAR MACHINE ALONE · Smiths follow the matter-flow and carve holey space through the stock.',
+    sub: 'ATP: “Artisans-metallurgists are itinerants because they follow the matter-flow of the subsoil” (412).',
+    color: '#ec008c',
+  },
+  nonstate: {
+    head: 'WARDING OFF ALONE · Bands keep every formation from crystallizing, and no stock forms.',
+    sub: 'ATP: “counter-State societies organizing mechanisms that ward off the State-form” (429).',
+    color: '#e0a800',
+  },
+};
+// Frames (snapshots) a phase caption stays up before it may change.
+const PHASE_HOLD = 150;
+
 function create(): SimInstance {
   let lg: LatticeGas | null = null;
   let smiths: Smiths | null = null;
@@ -54,6 +94,9 @@ function create(): SimInstance {
   let solidHistory: number[] = [];
   let dmuHistory: number[] = [];
   let mobHistory: number[] = [];
+  let phase: Phase = 'dispersed';
+  let phaseAge = 0;
+  let narration: Narration | null = null;
   let smooth: Float32Array | null = null;
   let acc = 0;
   let smithAcc = 0;
@@ -216,7 +259,6 @@ function create(): SimInstance {
       // Explain layer: each tag holds on to one feature for a few seconds and follows it.
       if (f.explain) {
         beginTags();
-        reserve(16, 16, 560, 176);
         const bounds = { width: f.width, height: f.height };
         const centroid = (site: number) => {
           const id = lg!.cid[site];
@@ -277,45 +319,26 @@ function create(): SimInstance {
         }
       }
 
-      // Readout: numbers, then a chart of solid (cyan), supersaturation (white), mobilization (yellow).
-      const pad = 16;
-      const w = 560;
-      const h = 176;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-      ctx.fillRect(pad, pad, w, h);
-      ctx.font = 'bold 22px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#f2f2f2';
-      ctx.fillText(`SOLID ${(solid * 100).toFixed(1)}%   Δμ ${dmuNow.toFixed(3)}`, pad + 14, pad + 30);
-      ctx.font = '17px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#9ca3af';
-      ctx.fillText(`largest ${lg.largest} · critical ~${nStar.toFixed(0)} · threshold ~${threshold.toFixed(0)}`, pad + 14, pad + 54);
-      const bits = [
-        warding ? `mobilization ${(mobilization * 100).toFixed(0)}%${mobilized ? ' ↑' : ' ↓'} · worn ${bands.worn}` : '',
-        smithing ? `carved ${smiths.carved}` : '',
-      ].filter(Boolean);
-      if (bits.length) ctx.fillText(bits.join(' · '), pad + 14, pad + 78);
-      const cx = pad + 14;
-      const cy = pad + 92;
-      const cw = w - 28;
-      const ch = h - 104;
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(cx, cy, cw, ch);
-      const plot = (series: number[], lo: number, hi: number, color: string) => {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        series.forEach((v, k) => {
-          const x = cx + (k / (HISTORY - 1)) * cw;
-          const y = cy + ch - Math.max(0, Math.min(1, (v - lo) / (hi - lo))) * ch;
-          if (k === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-      };
-      plot(dmuHistory, 0, 0.3, '#f2f2f2');
-      if (warding) plot(mobHistory, 0, 1, '#e0a800');
-      plot(solidHistory, 0, 0.4, '#00aeef');
+      // Narration, read by the shell for the strip above the canvas.
+      let cap = MODE_CAPTION[mode] ?? null;
+      if (mode === 'conflict') {
+        const want: Phase = mobilized ? 'warding' : solid >= params.calm ? 'crystallizing' : 'dispersed';
+        phaseAge++;
+        if (want !== phase && phaseAge > PHASE_HOLD) {
+          phase = want;
+          phaseAge = 0;
+        }
+        cap = PHASES[phase];
+      }
+      const series: Narration['series'] = [];
+      if (mode !== 'nonstate' || solidHistory.some((v) => v > 0)) series.push({ values: solidHistory.map((v) => v / 0.4), color: '#00aeef', label: 'stock' });
+      if (warding) series.push({ values: mobHistory.map((v) => v / Math.max(0.01, params.wearMax)), color: '#e0a800', label: 'bands mobilized' });
+      series.push({ values: dmuHistory.map((v) => v / 0.3), color: '#f2f2f2', label: 'surplus pressing' });
+      narration = cap ? { ...cap, series, span: HISTORY } : null;
+    },
+
+    narrate() {
+      return narration;
     },
   };
 }
