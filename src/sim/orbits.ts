@@ -16,6 +16,7 @@ export const SOCIETY = 1; // attached to its own society
 export const COMPANY = 2; // a free company
 export const ARMY = 3; // a company caught in orbit around the capital
 export const FREE = 4; // none of these
+export const PETTY = 5; // a society that collapsed into a small State of its own
 
 export interface OrbitParams {
   capital: number; // the central mass
@@ -41,6 +42,10 @@ export class Orbits {
   readonly isCompany: Uint8Array;
   readonly bound: Uint16Array; // steps a company has spent caught in orbit
   readonly contacted: Uint8Array; // 1 once a company has passed through the capital city
+  readonly isState: Uint8Array; // 1 for a society that collapsed into a small State
+  readonly isBorn: Uint8Array; // 1 for a company born from a society
+  readonly exSoc: Int16Array; // the society a body last belonged to, or -1
+  readonly exAt: Int32Array; // the step it left
   readonly kind: Uint8Array;
   private ax: Float32Array;
   private ay: Float32Array;
@@ -64,6 +69,15 @@ export class Orbits {
   raids = 0;
   /** Distance from the center within which a company counts as having met the capital city. */
   contactRadius = 14;
+  /** Lines of flight. A society smaller than `collapse` (its rms radius) collapses into a small
+   *  State; a group of at least `breakaway` former members leaving together fast becomes a company. */
+  collapse = 0.55;
+  breakaway = 5;
+  breakawaySpeed = 0.7;
+  hardened = 0;
+  born = 0;
+  annexed = 0;
+  private time = 0;
   /** Radius within which a caught company is absorbed. */
   armyRadius = 3;
   /** Steps in orbit after which a caught company is absorbed. */
@@ -93,6 +107,10 @@ export class Orbits {
     this.isCompany = new Uint8Array(cap);
     this.bound = new Uint16Array(cap);
     this.contacted = new Uint8Array(cap);
+    this.isState = new Uint8Array(cap);
+    this.isBorn = new Uint8Array(cap);
+    this.exSoc = new Int16Array(cap).fill(-1);
+    this.exAt = new Int32Array(cap);
     this.kind = new Uint8Array(cap);
     this.ax = new Float32Array(cap);
     this.ay = new Float32Array(cap);
@@ -122,6 +140,9 @@ export class Orbits {
       this.m[i] = 1;
       this.soc[i] = id;
       this.isCompany[i] = 0;
+      this.isState[i] = 0;
+      this.isBorn[i] = 0;
+      this.exSoc[i] = -1;
     }
   }
 
@@ -143,16 +164,24 @@ export class Orbits {
     this.isCompany[i] = 1;
     this.bound[i] = 0;
     this.contacted[i] = 0;
+    this.isState[i] = 0;
+    this.isBorn[i] = 0;
+    this.exSoc[i] = -1;
   }
 
-  private remove(i: number) {
+  /** Remove body i. Unless `pooled` is false, the people it carries return later as a new society. */
+  private remove(i: number, pooled = true) {
     const j = --this.n;
-    if (!this.isCompany[i]) this.pool++;
+    if (pooled && (!this.isCompany[i] || this.isBorn[i])) this.pool += Math.round(this.m[i]);
     for (const a of [this.x, this.y, this.vx, this.vy, this.m]) a[i] = a[j];
     this.soc[i] = this.soc[j];
     this.isCompany[i] = this.isCompany[j];
     this.bound[i] = this.bound[j];
     this.contacted[i] = this.contacted[j];
+    this.isState[i] = this.isState[j];
+    this.isBorn[i] = this.isBorn[j];
+    this.exSoc[i] = this.exSoc[j];
+    this.exAt[i] = this.exAt[j];
     this.kind[i] = this.kind[j];
   }
 
@@ -240,7 +269,11 @@ export class Orbits {
       const r = Math.hypot(dx, dy);
       const dv2 = (vx[i] - this.socVX[s]) ** 2 + (vy[i] - this.socVY[s]) ** 2;
       const vesc2 = (2 * this.G * this.socCount[s]) / Math.max(r, this.soft);
-      if (r > Math.max(this.socTide[s], 1.5) || dv2 > vesc2) this.soc[i] = -1;
+      if (r > Math.max(this.socTide[s], 1.5) || dv2 > vesc2) {
+        this.soc[i] = -1;
+        this.exSoc[i] = s;
+        this.exAt[i] = this.time;
+      }
     }
     // Societies under an alarming tide cool their internal motion and contract.
     for (let s = 0; s < this.nextSoc; s++) {
@@ -259,10 +292,10 @@ export class Orbits {
     // (Chandrasekhar's formula in local form: stronger in a dense crowd, weaker at high speed).
     if (p.friction > 0) {
       for (let i = 0; i < this.n; i++) {
-        if (!this.isCompany[i]) continue;
+        if (!this.isCompany[i] && !this.isState[i]) continue;
         let near = 0;
         for (let j = 0; j < this.n; j++) {
-          if (j === i || this.isCompany[j]) continue;
+          if (j === i || this.isCompany[j] || this.isState[j]) continue;
           if ((x[j] - x[i]) ** 2 + (y[j] - y[i]) ** 2 < 36) near++;
         }
         const v = Math.hypot(vx[i], vy[i]) + 1e-6;
@@ -306,6 +339,8 @@ export class Orbits {
         this.remove(i);
       }
     }
+    this.time++;
+    this.linesOfFlight(p);
     // Bodies that leave the field are gone; they return later as new societies at its edges. A
     // company that met the capital city on the way out has made a raid.
     for (let i = this.n - 1; i >= 0; i--) {
@@ -316,10 +351,112 @@ export class Orbits {
       }
     }
     // Scattered people regroup into new societies, as long as there are fewer than `societyLimit`.
-    while (this.pool >= this.societySize && this.societies() < this.societyLimit) {
+    let societies = this.societies();
+    while (this.pool >= this.societySize && societies < this.societyLimit) {
       this.pool -= this.societySize;
+      societies++;
       const a = this.rand() * 2 * Math.PI;
       this.addSociety(Math.min(this.w, this.h) * (this.spawnNear + (this.spawnFar - this.spawnNear) * this.rand()), a, p.capital);
+    }
+  }
+
+  /** Merge bodies into body `keep`, conserving mass, center of mass, and momentum. Returns its index. */
+  private merge(keep: number, others: number[]) {
+    let M = 0, X = 0, Y = 0, PX = 0, PY = 0;
+    for (const i of [keep, ...others]) {
+      M += this.m[i];
+      X += this.m[i] * this.x[i];
+      Y += this.m[i] * this.y[i];
+      PX += this.m[i] * this.vx[i];
+      PY += this.m[i] * this.vy[i];
+    }
+    this.m[keep] = M;
+    this.x[keep] = X / M;
+    this.y[keep] = Y / M;
+    this.vx[keep] = PX / M;
+    this.vy[keep] = PY / M;
+    // Remove from the highest index down; removing moves the last body into the freed slot.
+    for (const i of [...others].sort((a, b) => b - a)) {
+      const last = this.n - 1;
+      this.remove(i, false);
+      if (keep === last) keep = i;
+    }
+    return keep;
+  }
+
+  private linesOfFlight(p: OrbitParams) {
+    // Hardening: a society that has tightened past its collapse size becomes a small State.
+    for (let s = 0; s < this.nextSoc; s++) {
+      if (this.socCount[s] < 8 || this.socSize[s] > this.collapse) continue;
+      const members: number[] = [];
+      for (let i = 0; i < this.n; i++) if (this.soc[i] === s) members.push(i);
+      const keep = this.merge(members[0], members.slice(1));
+      this.soc[keep] = -1;
+      this.isState[keep] = 1;
+      this.socCount[s] = 0;
+      this.hardened++;
+    }
+    // A small State grows by drawing in bodies that pass close and slow (accretion).
+    for (let i = 0; i < this.n; i++) {
+      if (!this.isState[i]) continue;
+      const take: number[] = [];
+      for (let j = 0; j < this.n; j++) {
+        if (j === i || this.isCompany[j] || this.isState[j] || this.soc[j] >= 0) continue;
+        const r = Math.hypot(this.x[j] - this.x[i], this.y[j] - this.y[i]);
+        const dv2 = (this.vx[j] - this.vx[i]) ** 2 + (this.vy[j] - this.vy[i]) ** 2;
+        if (r < 1.2 && dv2 < (2 * this.G * this.m[i]) / Math.max(r, 0.5)) take.push(j);
+      }
+      if (take.length) i = this.merge(i, take);
+    }
+    // A small State that sinks near the center is annexed: its people become the capital city's,
+    // on orbits around it.
+    for (let i = this.n - 1; i >= 0; i--) {
+      if (!this.isState[i] || Math.hypot(this.x[i] - this.cx, this.y[i] - this.cy) > this.armyRadius * 2) continue;
+      const people = Math.round(this.m[i]);
+      this.annexed++;
+      this.remove(i, false);
+      for (let k = 0; k < people && this.n < this.cap; k++) {
+        const j = this.n++;
+        const r = 3 + 8 * this.rand();
+        const a = this.rand() * 2 * Math.PI;
+        const v = Math.sqrt((this.G * p.capital) / Math.sqrt(r * r + 4));
+        this.x[j] = this.cx + r * Math.cos(a);
+        this.y[j] = this.cy + r * Math.sin(a);
+        this.vx[j] = -Math.sin(a) * v;
+        this.vy[j] = Math.cos(a) * v;
+        this.m[j] = 1;
+        this.soc[j] = -1;
+        this.isCompany[j] = 0;
+        this.isState[j] = 0;
+        this.isBorn[j] = 0;
+        this.exSoc[j] = -1;
+        this.contacted[j] = 0;
+      }
+    }
+    // Breakaway: former members of one society that left together, recently and fast, become a company.
+    const groups = new Map<number, number[]>();
+    for (let i = 0; i < this.n; i++) {
+      const s = this.exSoc[i];
+      if (s < 0 || this.soc[i] >= 0 || this.isCompany[i] || this.isState[i] || this.time - this.exAt[i] > 60) continue;
+      const vx = this.vx[i], vy = this.vy[i];
+      if (Math.hypot(vx, vy) < this.breakawaySpeed) continue;
+      if (!groups.has(s)) groups.set(s, []);
+      groups.get(s)!.push(i);
+    }
+    for (const g of groups.values()) {
+      if (g.length < this.breakaway) continue;
+      // They must be leaving together: close to one another.
+      const mx = g.reduce((a, i) => a + this.x[i], 0) / g.length;
+      const my = g.reduce((a, i) => a + this.y[i], 0) / g.length;
+      const close = g.filter((i) => Math.hypot(this.x[i] - mx, this.y[i] - my) < 5);
+      if (close.length < this.breakaway) continue;
+      const keep = this.merge(close[0], close.slice(1));
+      this.isCompany[keep] = 1;
+      this.isBorn[keep] = 1;
+      this.bound[keep] = 0;
+      this.contacted[keep] = 0;
+      this.exSoc[keep] = -1;
+      this.born++;
     }
   }
 
@@ -333,7 +470,8 @@ export class Orbits {
       const r = Math.hypot(dx, dy);
       const energy = 0.5 * (vx[i] * vx[i] + vy[i] * vy[i]) - (this.G * capital) / Math.sqrt(r * r + 4);
       let k = FREE;
-      if (this.isCompany[i]) k = energy < 0 ? ARMY : COMPANY;
+      if (this.isState[i]) k = PETTY;
+      else if (this.isCompany[i]) k = energy < 0 ? ARMY : COMPANY;
       else if (this.soc[i] >= 0 && this.socCount[this.soc[i]] >= 4) k = SOCIETY;
       else if (energy < 0) k = HELD;
       kind[i] = k;

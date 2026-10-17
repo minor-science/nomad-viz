@@ -1,8 +1,8 @@
 import { Magnet, Orbit } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
-import { Orbits, HELD, SOCIETY, COMPANY, ARMY, type OrbitParams } from '../sim/orbits';
+import { Orbits, HELD, SOCIETY, COMPANY, ARMY, PETTY, type OrbitParams } from '../sim/orbits';
 import { Wobble } from '../sim/heating';
-import { beginTags, drawTag, StickyTag } from '../sim/tags';
+import { beginTags, StickyTag } from '../sim/tags';
 
 // Nomadology in a world where everything is gravity. Underneath is Newtonian gravity around a
 // heavy center. The capital is there from the start, a central mass whose closed orbits are its
@@ -28,7 +28,7 @@ const GRAY = '#64748b';
 const INK = '#f2f2f2';
 
 type Caption = { head: string; sub: string; color: string };
-type Event = 'stripped' | 'raid' | 'scatter' | 'caught' | 'absorbed' | 'formed' | 'tighten';
+type Event = 'stripped' | 'raid' | 'hardened' | 'born' | 'annexed' | 'scatter' | 'caught' | 'absorbed' | 'formed' | 'tighten';
 
 // The narrator reports events, since the three relate to one another in different ways.
 const EVENTS: Record<Event, Caption> = {
@@ -41,6 +41,21 @@ const EVENTS: Record<Event, Caption> = {
     head: 'WAR MACHINE · THE RAID · A company falls through the capital city at full speed, flings its bodies out, carries some off as followers, and rides on (a fly-by through the center).',
     sub: '“the raid can be seen as another object, rather than as a particular form of war” (Plateaus: 417).',
     color: MAGENTA,
+  },
+  hardened: {
+    head: 'LINE OF FLIGHT · WARDING OFF HARDENS INTO A STATE · A society tightened its orbits until it collapsed into a center of its own, a small State that draws in what passes close (a cluster collapsing as it cools).',
+    sub: '“Special institutions are thus necessary to enable a chief to become a man of State, but diffuse, collective mechanisms are just as necessary to prevent a chief from becoming one” (Plateaus: 357).',
+    color: CYAN,
+  },
+  born: {
+    head: 'LINE OF FLIGHT · WARDING OFF GIVES BIRTH TO A WAR MACHINE · A society struck hard flings a group of its members out together, and they ride off as a company of their own (an ejection).',
+    sub: 'In the band, a member who leaves “will not leave alone but will take along his allies” (Plateaus: 358).',
+    color: MAGENTA,
+  },
+  annexed: {
+    head: 'CAPTURE · ANNEXATION · A small State sinks into the capital city, and its people become the capital city’s, circling it (absorbed into the center’s orbits).',
+    sub: 'Each State is “a global (not local) integration” (Plateaus: 433).',
+    color: CYAN,
   },
   scatter: {
     head: 'WAR MACHINE · WAR ON THE STATE · A company tears through the capital city, and the bodies held in its orbits are flung out across the field (a gravitational fly-by).',
@@ -119,7 +134,7 @@ function create(): SimInstance {
   const wobble = new Wobble();
   let px = new Float32Array(0);
   let py = new Float32Array(0);
-  let last = { societies: 0, absorbed: 0, caught: 0, held: 0, frame: 0, raids: 0 };
+  let last = { societies: 0, absorbed: 0, caught: 0, held: 0, frame: 0, raids: 0, hardened: 0, born: 0, annexed: 0 };
   let heldTrend: number[] = [];
   const history = { held: [] as number[], societies: [] as number[], companies: [] as number[], army: [] as number[] };
   let societyFate: string | null = null;
@@ -127,9 +142,11 @@ function create(): SimInstance {
     capital: new StickyTag<number>(900),
     society: new StickyTag<number>(400),
     company: new StickyTag<number>(400),
+    petty: new StickyTag<number>(400),
   };
   let companyWas = COMPANY;
   let companyRaided = false;
+  let companyBorn = false;
 
   return {
     init(_w, _h, params) {
@@ -138,10 +155,13 @@ function create(): SimInstance {
       orbits.spawnNear = 0.26;
       orbits.spawnFar = 0.38;
       orbits.halo = 2;
+      orbits.collapse = 0.2;
+      orbits.breakaway = 7;
+      orbits.breakawaySpeed = 0.9;
       for (let k = 0; k < 14; k++) orbits.addSociety(22 + 22 * Math.random(), Math.random() * 2 * Math.PI, params.capital);
       for (const k of Object.keys(history) as (keyof typeof history)[]) history[k].length = 0;
       heldTrend = [];
-      last = { societies: orbits.societies(), absorbed: 0, caught: 0, held: 0, frame: 0, raids: 0 };
+      last = { societies: orbits.societies(), absorbed: 0, caught: 0, held: 0, frame: 0, raids: 0, hardened: 0, born: 0, annexed: 0 };
     },
 
     frame(ctx, f: Frame) {
@@ -206,12 +226,17 @@ function create(): SimInstance {
       tctx.fillStyle = 'rgba(11, 18, 32, 0.08)';
       tctx.fillRect(0, 0, width, height);
       tctx.lineCap = 'round';
-      const colorOf = (i: number) =>
-        orbits!.kind[i] === HELD ? CYAN : orbits!.kind[i] === SOCIETY ? YELLOW : orbits!.kind[i] === COMPANY ? MAGENTA : orbits!.kind[i] === ARMY ? CYAN : GRAY;
+      const colorOf = (i: number) => {
+        const k = orbits!.kind[i];
+        return k === HELD || k === ARMY || k === PETTY ? CYAN : k === SOCIETY ? YELLOW : k === COMPANY ? MAGENTA : GRAY;
+      };
+      // Heavy bodies are drawn by mass; a body that crossed over keeps a ring in the color it came from.
+      const heavy = (i: number) => orbits!.isCompany[i] === 1 || orbits!.isState[i] === 1;
+      const radius = (i: number) => (heavy(i) ? 5 + 1.6 * Math.sqrt(orbits!.m[i]) : 7);
       for (let i = 0; i < orbits.n; i++) {
         if (Math.abs(orbits.x[i] - px[i]) > 15 || Math.abs(orbits.y[i] - py[i]) > 15) continue;
         tctx.strokeStyle = colorOf(i);
-        tctx.lineWidth = orbits.isCompany[i] ? 10 : 4;
+        tctx.lineWidth = heavy(i) ? 10 : 4;
         tctx.beginPath();
         tctx.moveTo(px[i] * sx, py[i] * sy);
         tctx.lineTo(orbits.x[i] * sx, orbits.y[i] * sy);
@@ -241,12 +266,12 @@ function create(): SimInstance {
       // The bodies.
       for (let i = 0; i < orbits.n; i++) {
         ctx.fillStyle = colorOf(i);
-        const r = orbits.isCompany[i] ? 16 : 7;
         ctx.beginPath();
-        ctx.arc(orbits.x[i] * sx, orbits.y[i] * sy, r, 0, Math.PI * 2);
+        ctx.arc(orbits.x[i] * sx, orbits.y[i] * sy, radius(i), 0, Math.PI * 2);
         ctx.fill();
-        if (orbits.kind[i] === ARMY) {
-          ctx.strokeStyle = MAGENTA;
+        const origin = orbits.kind[i] === ARMY ? MAGENTA : orbits.isState[i] || orbits.isBorn[i] ? YELLOW : null;
+        if (origin) {
+          ctx.strokeStyle = origin;
           ctx.lineWidth = 5;
           ctx.stroke();
         }
@@ -255,7 +280,10 @@ function create(): SimInstance {
       // Narration: events first, then what holds.
       last.frame++;
       let event: Event | null = null;
-      if (orbits.raids > last.raids) event = 'raid';
+      if (orbits.hardened > last.hardened) event = 'hardened';
+      else if (orbits.born > last.born) event = 'born';
+      else if (orbits.raids > last.raids) event = 'raid';
+      else if (orbits.annexed > last.annexed) event = 'annexed';
       else if (societies < last.societies) event = 'stripped';
       else if (orbits.absorbed > last.absorbed) event = 'absorbed';
       else if (co.caught > last.caught) event = 'caught';
@@ -264,6 +292,9 @@ function create(): SimInstance {
       else if (orbits.socAlarm.some((a, s) => a && orbits!.socCount[s] >= 4) && p.cool > 0) event = 'tighten';
       last.societies = societies;
       last.raids = orbits.raids;
+      last.hardened = orbits.hardened;
+      last.born = orbits.born;
+      last.annexed = orbits.annexed;
       last.absorbed = orbits.absorbed;
       last.caught = co.caught;
       if (mode === 'conflict') {
@@ -346,10 +377,15 @@ function create(): SimInstance {
           if (i !== null && i < orbits.n && orbits.isCompany[i]) {
             companyWas = orbits.kind[i];
             companyRaided = orbits.contacted[i] === 1;
+            companyBorn = orbits.isBorn[i] === 1;
           }
           tags.company.draw(
             ctx,
-            companyWas === ARMY ? 'CAPTURE · a company caught in orbit: the capital city’s army now' : 'WAR MACHINE · a company on its own course, outside every orbit',
+            companyWas === ARMY
+              ? 'CAPTURE · a company caught in orbit: the capital city’s army now'
+              : companyBorn
+                ? 'WAR MACHINE · a company born from a society, its members riding off together'
+                : 'WAR MACHINE · a company on its own course, outside every orbit',
             companyWas === ARMY ? CYAN : MAGENTA,
             bounds,
             companyWas === ARMY
@@ -359,7 +395,16 @@ function create(): SimInstance {
                 : 'WAR MACHINE · this company rode off the field',
           );
         }
-        void drawTag;
+        if (mode === 'conflict' || mode === 'nonstate') {
+          tags.petty.update(
+            (i) => (i < orbits!.n && orbits!.isState[i] ? { x: orbits!.x[i] * sx, y: orbits!.y[i] * sy } : null),
+            () => {
+              for (let i = 0; i < orbits!.n; i++) if (orbits!.isState[i] && orbits!.y[i] < H * 0.6) return { anchor: i, x: orbits!.x[i] * sx, y: orbits!.y[i] * sy };
+              return null;
+            },
+          );
+          tags.petty.draw(ctx, 'LINE OF FLIGHT · a society that hardened into a small State, drawing in what passes close', CYAN, bounds, 'CAPTURE · this small State was annexed by the capital city');
+        }
       }
     },
 
@@ -407,6 +452,8 @@ export const cosmic: ModelDef = {
     { swatch: YELLOW, see: 'Yellow clusters, with dashed rings', social: 'societies running on their own code, keeping the capital city’s threshold at a distance', physics: 'clusters bound by their own gravity, each ring its tidal radius, inside which the capital city’s tides would strip it', atp: '“The threshold is in fact already there, but outside the limit” (Plateaus: 440)', example: 'a band whose members “disperse to eat or sleep separately,” so no leader gains stable power (358)' },
     { swatch: MAGENTA, see: 'Large magenta bodies', social: 'companies on their own course, outside every orbit, at war with the State when they meet it', physics: 'heavy bodies on unbound paths, scattering what they pass and slowed by dynamical friction', atp: 'war against “the State-form, the destruction of which is at issue” (Plateaus: 420)', example: '“Mercenary or territorial? A professional army or a conscripted army?” (419), the forms of appropriation' },
     { swatch: CYAN, see: 'Cyan bodies ringed in magenta', social: 'a company appropriated as the capital city’s army', physics: 'a heavy body caught in a bound orbit', atp: 'the army as “the form under which it is appropriated by the State” (Plateaus: 418)' },
+    { swatch: CYAN, see: 'Large cyan bodies ringed in yellow', social: 'a society that hardened into a small State, a line of flight from warding off into capture', physics: 'a cluster that cooled until it collapsed into one body, growing by drawing in what passes close', atp: '“Special institutions are thus necessary to enable a chief to become a man of State, but diffuse, collective mechanisms are just as necessary to prevent a chief from becoming one” (Plateaus: 357)' },
+    { swatch: MAGENTA, see: 'Magenta bodies ringed in yellow', social: 'a company born from a society, a line of flight from warding off into the war machine', physics: 'members flung out of a cluster together and leaving as one body', atp: 'a member who leaves “will not leave alone but will take along his allies” (Plateaus: 358)' },
     { swatch: GRAY, see: 'Gray bodies', social: 'people scattered from the capital city or a society, not yet regrouped', physics: 'bodies bound to nothing', atp: 'the State’s capture of “flows of all kinds, populations, commodities or commerce, money or capital” (Plateaus: 386)' },
   ],
   create,
