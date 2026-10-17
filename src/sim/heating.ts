@@ -10,6 +10,11 @@ export class HeatPatches {
   private nx: number;
   private width: number;
 
+  /** Where each heater sits along the floor, in cells. */
+  get centers(): readonly number[] {
+    return this.cx;
+  }
+
   constructor(nx: number, count: number, rand: () => number = Math.random) {
     this.nx = nx;
     this.floor = new Float32Array(nx);

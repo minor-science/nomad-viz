@@ -154,6 +154,7 @@ function create(): SimInstance {
     conduit: new StickyTag<number>(400),
     segment: new StickyTag<{ x: number; y: number }>(300),
     pack: new StickyTag<{ x: number; y: number }>(300),
+    upswell: new StickyTag<number>(400),
   };
 
   return {
@@ -437,9 +438,24 @@ function create(): SimInstance {
           tags.pack.draw(ctx, 'WAR MACHINE · journeymen moving from site to site, outside the corvée and the guilds', MAGENTA, bounds, packFate ?? 'WAR MACHINE · these journeymen have stopped moving');
         }
         drawTag(ctx, 4, dye.sources[0] * sy, 'the sources: the villages where the corvée recruits', INK, bounds);
-        if (mode !== 'state' && !even && floorMax > floorMean * 1.4) {
-          const hx = floor.indexOf(floorMax);
-          drawTag(ctx, hx * sx, height - sy, 'the upswell: labor moving on its own account, in “a rhythm without measure”', WARM, bounds);
+        if (mode !== 'state' && !even) {
+          // The upswell tag follows one heater while it surges, rather than jumping to whichever
+          // spot on the floor is hottest this frame, and fades when that heater cools.
+          const centers = heaters.centers;
+          // Only heaters on the right, clear of the legend at the bottom left.
+          const hot = (k: number, from = 0.6) => {
+            const c = centers[k];
+            return c > NX * from && c < NX - 6 && floor[Math.round(c)] > floorMean * 1.4;
+          };
+          tags.upswell.update(
+            (k) => (hot(k, 0.55) ? { x: centers[k] * sx, y: height - sy } : null),
+            () => {
+              let best = -1;
+              for (let k = 0; k < centers.length; k++) if (hot(k) && (best < 0 || floor[Math.round(centers[k])] > floor[Math.round(centers[best])])) best = k;
+              return best < 0 ? null : { anchor: best, x: centers[best] * sx, y: height - sy };
+            },
+          );
+          tags.upswell.draw(ctx, 'the upswell: labor moving on its own, in “a rhythm without measure”', WARM, bounds);
         }
       }
     },
