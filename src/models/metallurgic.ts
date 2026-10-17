@@ -73,7 +73,7 @@ const MODE_CAPTION: Partial<Record<Mode, { head: string; sub: string; color: str
     color: '#ec008c',
   },
   nonstate: {
-    head: 'WARDING OFF ALONE · Bands keep every formation from crystallizing, and no stock forms.',
+    head: 'WARDING OFF ALONE · Bands keep every formation from crystallizing, so no stock ever forms.',
     sub: '“counter-State societies organizing mechanisms that ward off the State-form” (Plateaus: 429).',
     color: '#e0a800',
   },
@@ -376,7 +376,7 @@ export const metallurgic: ModelDef = {
   cards: [
     { process: 'capture', heading: '01 / Capture', text: 'Nucleation: clusters form and dissolve until one crosses the threshold and grows into cyan grains, drawing down the solution that feeds it. Plateaus speaks of an apparatus “crystallizing” (357).' },
     { process: 'warMachine', heading: '02 / War machine', text: 'Smiths: magenta trails follow the grain boundaries and carve holes through the solid, returning matter to the flow. Smiths are itinerants who “follow the matter-flow” (Plateaus: 412) and make holey space (413-15).' },
-    { process: 'wardingOff', heading: '03 / Warding off', text: 'Bands: many small agents settle on clusters and block their growth, and as the stock grows they mobilize and wear down the stock, since “depletion is the means by which primitive groups ward off the stock” (Plateaus: 440).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Bands: many small agents settle on clusters and block their growth, then mobilize as the stock grows and wear down the stock, since “depletion is the means by which primitive groups ward off the stock” (Plateaus: 440).' },
   ],
   legend: [
     { swatch: '#64748b', see: 'Gray clusters', social: 'a nascent hierarchy, prestige that might harden into power', physics: 'nuclei below the critical size, which mostly dissolve', atp: 'formations of power kept from “taking on consistency” (Plateaus: 433)', example: 'Clastres’s chiefs, who speak but cannot command' },

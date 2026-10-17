@@ -48,14 +48,14 @@ const GAINS: Caption[][] = [
       color: CYAN,
     },
     {
-      head: 'CAPTURE GAINS · The surge passes, and the conduit takes back the roaming journeymen and settles them into guilds and assigned channels (turbulence settles into laminar flow).',
+      head: 'CAPTURE GAINS · As the surge passes, the conduit takes back the roaming journeymen and settles them into guilds and assigned channels (turbulence settles into laminar flow).',
       sub: '“Settling, sedentarizing labor power, regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).',
       color: CYAN,
     },
   ],
   [
     {
-      head: 'WARDING OFF GAINS · Segments form ahead of the conduit’s front: bands keep their labor in their own circles, and none of it reaches the State’s works (convection cells stop the laminar flow).',
+      head: 'WARDING OFF GAINS · Segments form ahead of the conduit’s front: bands keep their labor in their own circles, so none of it reaches the State’s works (convection cells stop the laminar flow).',
       sub: 'War “maintains the dispersal and segmentarity of groups” (Plateaus: 357).',
       color: YELLOW,
     },
@@ -73,7 +73,7 @@ const GAINS: Caption[][] = [
       color: MAGENTA,
     },
     {
-      head: 'WAR MACHINE GAINS · The segments break open, and their members take to the road in packs that cross the whole space (convection cells break into turbulence).',
+      head: 'WAR MACHINE GAINS · The segments break open as their members take to the road in packs that cross the whole space (convection cells break into turbulence).',
       sub: 'The war machine is “distributed by turbulence across a smooth space” (Plateaus: 363).',
       color: MAGENTA,
     },
@@ -87,7 +87,7 @@ const HOLDING: Caption[] = [
     color: CYAN,
   },
   {
-    head: 'WARDING OFF HOLDS · Bands keep their work in their own circles, sharing out and dispersing, and the conduit cannot draft them (convection cells).',
+    head: 'WARDING OFF HOLDS · Bands keep their work in their own circles, sharing out and dispersing where the conduit cannot draft them (convection cells).',
     sub: 'The members of a band “disperse to eat or sleep separately,” so the leader cannot acquire stable power (Plateaus: 358).',
     color: YELLOW,
   },
@@ -109,7 +109,7 @@ const MODE_CAPTION: Partial<Record<Mode, Caption>> = {
     color: CYAN,
   },
   nonstate: {
-    head: 'WARDING OFF ALONE · A weak draft and even heat: bands keep their work in their own circles, and none of it reaches the State’s works (convection cells).',
+    head: 'WARDING OFF ALONE · A weak draft and even heat: bands keep their work in their own circles, where none of it reaches the State’s works (convection cells).',
     sub: 'War “maintains the dispersal and segmentarity of groups” (Plateaus: 357).',
     color: YELLOW,
   },
@@ -457,9 +457,9 @@ export const hydraulic: ModelDef = {
     ['Heat', (p.heat * 1000).toFixed(1)],
   ],
   cards: [
-    { process: 'capture', heading: '01 / Capture', text: 'The conduit: the State’s draft carries labor from the villages toward its works in assigned channels, and the cyan ticks mark how far it reaches (laminar flow). The State is forever “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).' },
+    { process: 'capture', heading: '01 / Capture', text: 'The conduit: the State’s draft carries labor from the villages toward its works in assigned channels, with cyan ticks marking how far it reaches (laminar flow). The State is forever “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).' },
     { process: 'warMachine', heading: '02 / War machine', text: 'Packs: when the upswell surges, labor slips its channels and roams in packs across the whole space, as the journeymen’s compagnonnages did (turbulence). “From turba to turbo” (Plateaus: 361), a movement “distributed by turbulence across a smooth space” (363).' },
-    { process: 'wardingOff', heading: '03 / Warding off', text: 'Segments: bands keep their work in small circles of their own ahead of the conduit’s front, and the draft cannot get through (convection cells). War “maintains the dispersal and segmentarity of groups” (Plateaus: 357), and “the circles are not concentric” (433).' },
+    { process: 'wardingOff', heading: '03 / Warding off', text: 'Segments: bands keep their work in small circles of their own ahead of the conduit’s front, where the draft cannot get through (convection cells). War “maintains the dispersal and segmentarity of groups” (Plateaus: 357), and “the circles are not concentric” (433).' },
   ],
   legend: [
     { swatch: CYAN, see: 'Cyan dye and cyan ticks', social: 'labor drafted along the State’s channels, from the villages to its works, by corvée and by guild, the ticks marking how far the draft reaches', physics: 'laminar flow, each source’s dye staying in its lane (Reynolds 1883)', atp: 'the State “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368)', example: 'the corvée gangs on an empire’s canals (cf. Wittfogel, 363)' },
