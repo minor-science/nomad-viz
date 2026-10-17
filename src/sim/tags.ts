@@ -4,6 +4,8 @@
 
 let placed: { x: number; y: number; w: number; h: number }[] = [];
 let shown = new Set<string>();
+// How far a tag's box sits from its feature, as a multiple of the usual distance.
+let tail = 1;
 
 // A tag's process sets its color.
 const PROCESS_COLOR: Record<string, string> = {
@@ -13,10 +15,14 @@ const PROCESS_COLOR: Record<string, string> = {
   POLARIZATION: '#2f8f4e',
 };
 
-/** Start a frame's tags; `clear` lists areas (such as the legend) that tags should avoid. */
-export function beginTags(clear: { x: number; y: number; w: number; h: number }[] = []) {
+/**
+ * Start a frame's tags. `clear` lists areas (such as the legend) that tags should avoid, and
+ * `tailLength` sets how far boxes sit from their features (1 is close; larger gives long leader lines).
+ */
+export function beginTags(clear: { x: number; y: number; w: number; h: number }[] = [], tailLength = 1) {
   placed = [...clear];
   shown = new Set();
+  tail = tailLength;
 }
 
 /** Mark an area (a readout, a caption) that tags should keep clear of. */
@@ -59,8 +65,8 @@ export function drawTag(
   // already has a spot keeps it while it still fits, so it does not flip back and forth.
   // Rows run away from the feature: upward from a spot above it, downward from a spot below it.
   const rect = (side: number, vert: number, row: number) => ({
-    x: side === 0 ? x + 28 : x - 28 - w,
-    y: vert === 0 ? y - 46 - row * (h + 8) : y + 22 + row * (h + 8),
+    x: side === 0 ? x + 28 * tail : x - 28 * tail - w,
+    y: vert === 0 ? y - 46 * tail - row * (h + 8) : y + 22 * tail + row * (h + 8),
     w,
     h,
   });

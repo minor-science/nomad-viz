@@ -291,7 +291,8 @@ function create(): SimInstance {
       if (f.explain) {
         // Tags keep clear of the legend and of the capital, where most of the action is.
         const zone = (8 + 14 * shares.held) * sx;
-        beginTags([...(f.keepClear ?? []), { x: orbits.cx * sx - zone, y: orbits.cy * sy - zone, w: zone * 2, h: zone * 2 }]);
+        // Long tails: the boxes sit well away from the bodies they point at.
+        beginTags([...(f.keepClear ?? []), { x: orbits.cx * sx - zone, y: orbits.cy * sy - zone, w: zone * 2, h: zone * 2 }], 5);
         const bounds = { width, height };
         tags.capital.update(
           () => ({ x: orbits!.cx * sx, y: orbits!.cy * sy - zone }),
