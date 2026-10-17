@@ -170,5 +170,10 @@ export const acoustic: ModelDef = {
     { process: 'warMachine', heading: '02 / War machine', text: 'Crossing. Dust moves across the still lines instead of settling on them. ATP, after Boulez: “in a smooth space-time one occupies without counting” (477).' },
     { process: 'wardingOff', heading: '03 / Warding off', text: 'Silence zones. Dust inside them ignores the plate. These zones are random agitation, not real interference (see Sources).' },
   ],
+  legend: [
+    { swatch: '#00aeef', see: 'Cyan dust', physics: 'grains drifting toward the lines of a vibrating plate that stay still', atp: 'capture as resonance, “a redundancy of resonance (not of frequency)” (433)' },
+    { swatch: '#ec008c', see: 'Magenta dust', physics: 'grains moving across the still lines instead of settling', atp: 'smooth space-time, where “one occupies without counting” (477)', example: 'Boulez’s non-pulsed time' },
+    { swatch: '#b8860b', see: 'Yellow zones', physics: 'random agitation (a stand-in, not real interference)', atp: 'warding off, in this early version only roughly modeled' },
+  ],
   create,
 };

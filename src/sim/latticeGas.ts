@@ -18,9 +18,19 @@
 
 export interface LatticeParams {
   T: number;
+  /** Supersaturation, used directly when there is no reservoir. */
   dmu: number;
   Q: number;
   jCross: number;
+}
+
+// A finite reservoir of dissolved atoms. Attaching an atom draws one from it, detaching returns
+// one, and the supersaturation follows the dilute-solution law dmu = T ln(D / D_eq). So a growing
+// crystal lowers the supersaturation that feeds it, and a feed (atoms added per sweep) raises it.
+// Depleted atoms are destroyed, not returned.
+export interface Reservoir {
+  dissolved: number;
+  equilibrium: number;
 }
 
 // Interface tension of the square-lattice Ising model along a lattice axis (Onsager 1944),
@@ -71,6 +81,9 @@ export class LatticeGas {
   readonly cid: Int32Array;
   clusters: Cluster[] = [];
   largest = 0;
+  reservoir: Reservoir | null = null;
+  /** Sites where no atom may attach (set by bands of inhibitors). */
+  readonly blocked: Uint8Array;
   private rand: () => number;
   private nb: Int32Array;
 
@@ -80,6 +93,7 @@ export class LatticeGas {
     this.n = cols * rows;
     this.occ = new Uint8Array(this.n);
     this.cid = new Int32Array(this.n).fill(-1);
+    this.blocked = new Uint8Array(this.n);
     this.rand = rng(seed);
     // Neighbor table, four per site, with periodic edges.
     this.nb = new Int32Array(this.n * 4);
@@ -137,24 +151,40 @@ export class LatticeGas {
     return 1 + Math.floor(this.rand() * Q);
   }
 
+  /** Current supersaturation: from the reservoir if there is one, else the parameter. */
+  supersaturation(p: LatticeParams): number {
+    const r = this.reservoir;
+    if (!r) return p.dmu;
+    return p.T * Math.log(Math.max(r.dissolved, 1e-9) / r.equilibrium);
+  }
+
   /** Run `sweeps` Monte Carlo sweeps (one sweep = one attempt per site on average). */
   sweep(p: LatticeParams, sweeps = 1) {
-    const { T, dmu, Q, jCross } = p;
-    const mu = -2 + dmu;
+    const { T, Q, jCross } = p;
+    const res = this.reservoir;
+    let mu = -2 + this.supersaturation(p);
     const beta = 1 / Math.max(T, 1e-3);
     const attempts = Math.round(this.n * sweeps);
     const r = this.rand;
     for (let a = 0; a < attempts; a++) {
+      if (res && (a & 255) === 0) mu = -2 + this.supersaturation(p);
       const i = (r() * this.n) | 0;
       const o = this.occ[i];
       if (r() < 0.5) {
         if (!o) {
+          if (this.blocked[i]) continue;
           const no = this.attachOrientation(i, Q);
           const dE = this.bondEnergy(i, no, jCross) - mu;
-          if (dE <= 0 || r() < Math.exp(-beta * dE)) this.occ[i] = no;
+          if (dE <= 0 || r() < Math.exp(-beta * dE)) {
+            this.occ[i] = no;
+            if (res) res.dissolved -= 1;
+          }
         } else {
           const dE = -this.bondEnergy(i, o, jCross) + mu;
-          if (dE <= 0 || r() < Math.exp(-beta * dE)) this.occ[i] = 0;
+          if (dE <= 0 || r() < Math.exp(-beta * dE)) {
+            this.occ[i] = 0;
+            if (res) res.dissolved += 1;
+          }
         }
       } else if (o) {
         const j = this.nb[i * 4 + ((r() * 4) | 0)];
@@ -209,7 +239,8 @@ export class LatticeGas {
     return out;
   }
 
-  /** Remove every atom of a cluster (depletion). Requires a current label(). */
+  /** Remove every atom of a cluster (depletion). The atoms are destroyed, not returned to the
+   * reservoir. Requires a current label(). */
   deplete(id: number) {
     for (let i = 0; i < this.n; i++) {
       if (this.cid[i] === id) {
@@ -217,6 +248,37 @@ export class LatticeGas {
         this.cid[i] = -1;
       }
     }
+  }
+
+  /** Remove up to `count` atoms of a cluster from its surface inward (graded depletion). The atoms
+   * are destroyed, not returned. Requires a current label(); returns how many were removed. */
+  wear(id: number, count: number): number {
+    const { occ, cid, nb } = this;
+    let removed = 0;
+    while (removed < count) {
+      const surface: number[] = [];
+      for (let i = 0; i < this.n; i++) {
+        if (cid[i] !== id || !occ[i]) continue;
+        for (let k = 0; k < 4; k++) {
+          if (!occ[nb[i * 4 + k]]) {
+            surface.push(i);
+            break;
+          }
+        }
+      }
+      if (!surface.length) break;
+      for (let k = surface.length - 1; k > 0; k--) {
+        const j = (this.rand() * (k + 1)) | 0;
+        [surface[k], surface[j]] = [surface[j], surface[k]];
+      }
+      for (const i of surface) {
+        if (removed >= count) break;
+        occ[i] = 0;
+        cid[i] = -1;
+        removed++;
+      }
+    }
+    return removed;
   }
 
   /** A site is on a boundary if it holds an atom next to an empty site or a different orientation. */

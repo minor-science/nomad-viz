@@ -42,7 +42,7 @@ export function readParams(controls: ControlSpec[], base: Params): Params {
 export function writeState(model: string, mode: Mode, params: Params, base: Params) {
   const q = new URLSearchParams();
   q.set('model', model);
-  if (mode !== 'state') q.set('mode', mode);
+  if (mode !== 'conflict') q.set('mode', mode);
   const panel = readPanel();
   for (const [k, v] of Object.entries(params)) {
     if (base[k] !== v) q.set(k, String(v));

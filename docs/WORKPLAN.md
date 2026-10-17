@@ -16,6 +16,7 @@ Deleuze and Guattari were not scientists. Where their physics is loose or backwa
 
 - Each model stages only the processes its physics can carry honestly. A shared five-process key (the charts' colors and order) shows which processes are present, and gives one line on why the others are absent.
 - No particle belongs to a fixed team. A particle's behavior comes from the fields it is in.
+- **Conflict mode cycles.** Over repeated cycles, each process expresses the phenomenon ATP describes, and none takes over for good: the model goes back and forth between states and mixtures. Every model opens in conflict mode, and the other modes isolate one process. A rebuild is not done until a test shows repeated episodes with no permanent winner (Jo, Oct 17, 2026).
 - Every behavior on screen traces back to an ATP passage, a named source, or a physics model, and the sources panel says which.
 - All prose follows the house rules used for the charts. It goes through `voice_lint.py`, and every ATP page is checked against the ATP text in `protevi-response/sources_text/core/`.
 

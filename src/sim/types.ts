@@ -2,8 +2,11 @@ import type { LucideIcon } from 'lucide-react';
 import type { ProcessId } from '../processes';
 
 export type ModelId = 'hydraulic' | 'metallurgic' | 'acoustic' | 'cosmic';
-export type Mode = 'state' | 'nomad' | 'nonstate' | 'conflict';
-export const MODES: Mode[] = ['state', 'nomad', 'nonstate', 'conflict'];
+// Modes are named by formation for URL stability: state = capture, nomad = war machine,
+// nonstate = warding off, town = polarization.
+export type Mode = 'state' | 'nomad' | 'nonstate' | 'town' | 'conflict';
+export const MODES: Mode[] = ['state', 'nomad', 'nonstate', 'town', 'conflict'];
+export const DEFAULT_MODES: Mode[] = ['state', 'nomad', 'nonstate', 'conflict'];
 
 export type Params = Record<string, number>;
 
@@ -18,6 +21,8 @@ export interface Frame {
   mode: Mode;
   params: Params;
   motionScale: number;
+  /** Draw on-canvas tags for the Explain layer. */
+  explain: boolean;
 }
 
 export interface SimInstance {
@@ -25,8 +30,8 @@ export interface SimInstance {
   frame(ctx: CanvasRenderingContext2D, f: Frame): void;
 }
 
-export type Tint = 'magenta' | 'cyan' | 'yellow' | 'ink';
-export type Format = 'int' | 'pct' | 'px' | 'x1000' | 'dec2' | 'times';
+export type Tint = 'magenta' | 'cyan' | 'yellow' | 'green' | 'ink';
+export type Format = 'int' | 'pct' | 'px' | 'x1000' | 'dec2' | 'dec3' | 'times';
 
 export interface SliderSpec {
   kind: 'slider';
@@ -55,6 +60,16 @@ export interface PairSpec {
 
 export type ControlSpec = SliderSpec | PairSpec;
 
+// One row of a model's legend: what you see, what it is physically, what it stands for in ATP,
+// and an example from ATP or from the charts' sources.
+export interface LegendRow {
+  swatch: string;
+  see: string;
+  physics: string;
+  atp: string;
+  example?: string;
+}
+
 export interface Card {
   process: ProcessId;
   heading: string;
@@ -71,9 +86,14 @@ export interface ModelDef {
   subtitle: string;
   badge?: string;
   describe: (mode: Mode) => string;
+  /** Modes this model stages, in button order. Defaults to DEFAULT_MODES. */
+  modes?: Mode[];
+  /** Frames computed for the reduced-motion still. Defaults to 150. */
+  stillFrames?: number;
   controls: ControlSpec[];
   status: (p: Params) => [string, string][];
   cards: Card[];
+  legend?: LegendRow[];
   create: () => SimInstance;
 }
 
@@ -91,6 +111,7 @@ export function formatValue(v: number, f: Format): string {
   if (f === 'px') return `${v}px`;
   if (f === 'x1000') return (v * 1000).toFixed(0);
   if (f === 'dec2') return v.toFixed(2);
+  if (f === 'dec3') return v.toFixed(3);
   if (f === 'times') return `${v.toFixed(2)}×`;
   return String(v);
 }

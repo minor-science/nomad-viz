@@ -31,4 +31,12 @@ export const BIBLIOGRAPHY: Record<string, Work> = {
   simondon1964: { short: 'Simondon 1964', cite: 'Simondon, Gilbert. L’individu et sa genèse physico-biologique. Paris: PUF, 1964.', atp: '555 n. 33, 562 n. 93' },
   volmerWeber: { cite: 'Volmer, M., and A. Weber. “Keimbildung in übersättigten Gebilden.” Zeitschrift für physikalische Chemie 119 (1926): 277-301.' },
   wittfogel: { short: 'Wittfogel 1957', cite: 'Wittfogel, Karl. Oriental Despotism: A Comparative Study of Total Power. New Haven: Yale University Press, 1957.', atp: '565 n. 9' },
+  carney: { cite: 'Carney, Judith A., and Richard Nicholas Rosomoff. In the Shadow of Slavery: Africa’s Botanical Legacy in the Atlantic World. Berkeley: University of California Press, 2009.' },
+  fedkiw: { cite: 'Fedkiw, Ronald, Jos Stam, and Henrik Wann Jensen. “Visual Simulation of Smoke.” Proceedings of SIGGRAPH 2001: 15-22.' },
+  helmholtz: { cite: 'Helmholtz, Hermann von. “Über discontinuirliche Flüssigkeits-Bewegungen.” Monatsberichte der Königlichen Preussischen Akademie der Wissenschaften zu Berlin (1868): 215-28.' },
+  kelvin: { cite: 'Thomson, William (Lord Kelvin). “Hydrokinetic Solutions and Observations.” Philosophical Magazine 42 (1871): 362-77.' },
+  raymond: { cite: 'Raymond, James A., and Arthur L. DeVries. “Adsorption Inhibition as a Mechanism of Freezing Resistance in Polar Fishes.” Proceedings of the National Academy of Sciences 74 (1977): 2589-93.' },
+  selle: { cite: 'Selle, Andrew, Ronald Fedkiw, ByungMoon Kim, Yingjie Liu, and Jarek Rossignac. “An Unconditionally Stable MacCormack Method.” Journal of Scientific Computing 35 (2008): 350-71.' },
+  shields: { cite: 'Shields, Albert. Anwendung der Ähnlichkeitsmechanik und der Turbulenzforschung auf die Geschiebebewegung. Berlin: Preussische Versuchsanstalt für Wasserbau und Schiffbau, 1936.' },
+  stam: { cite: 'Stam, Jos. “Stable Fluids.” Proceedings of SIGGRAPH 1999: 121-28.' },
 };

@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Info, Pause, Play, RotateCcw, X } from 'lucide-react';
+import { Info, List, Pause, Play, RotateCcw, Tags, X } from 'lucide-react';
 import { PROCESS } from '../processes';
 import {
-  WORLD_SCALE, defaults, formatValue,
+  WORLD_SCALE, DEFAULT_MODES, defaults, formatValue,
   type ControlSpec, type Mode, type ModelDef, type Params, type Tint,
 } from '../sim/types';
 import { readMode, readPanel, readParams, setPanel, writeState } from '../sim/url';
@@ -12,17 +12,20 @@ const SourcesPanel = lazy(() => import('./SourcesPanel'));
 // Under reduced motion the shell shows a still: this many frames are computed off screen.
 const STILL_FRAMES = 150;
 
+// Conflict comes first: every model opens with its processes together, and the others isolate one.
 const MODE_BUTTONS: { mode: Mode; label: string; on: string; hover: string }[] = [
+  { mode: 'conflict', label: 'Conflict', on: 'bg-xerox-accent text-xerox-bg', hover: 'hover:bg-xerox-accent hover:text-xerox-bg' },
   { mode: 'state', label: 'Capture', on: 'bg-xerox-cyan text-xerox-ink', hover: 'hover:bg-xerox-cyan' },
   { mode: 'nomad', label: 'War machine', on: 'bg-xerox-magenta text-xerox-bg', hover: 'hover:bg-xerox-magenta hover:text-xerox-bg' },
   { mode: 'nonstate', label: 'Warding off', on: 'bg-xerox-yellow text-xerox-ink', hover: 'hover:bg-xerox-yellow' },
-  { mode: 'conflict', label: 'Conflict', on: 'bg-xerox-accent text-xerox-bg', hover: 'hover:bg-xerox-accent hover:text-xerox-bg' },
+  { mode: 'town', label: 'Polarization', on: 'bg-[#2f8f4e] text-xerox-bg', hover: 'hover:bg-[#2f8f4e] hover:text-xerox-bg' },
 ];
 
 const TINT: Record<Tint, { text: string; accent: string }> = {
   magenta: { text: 'text-xerox-magenta', accent: 'accent-xerox-magenta' },
   cyan: { text: 'text-xerox-cyan', accent: 'accent-xerox-cyan' },
   yellow: { text: 'text-xerox-yellow', accent: 'accent-xerox-yellow' },
+  green: { text: 'text-[#2f8f4e]', accent: 'accent-[#2f8f4e]' },
   ink: { text: '', accent: 'accent-xerox-ink' },
 };
 
@@ -35,10 +38,17 @@ interface Props {
 
 export function ModelShell({ model, isReducedMotion = false, isHighVis = false, onAnnounce }: Props) {
   const base = useMemo(() => defaults(model.controls), [model]);
-  const [mode, setMode] = useState<Mode>(() => readMode() ?? 'state');
+  const modes = model.modes ?? DEFAULT_MODES;
+  const [mode, setMode] = useState<Mode>(() => {
+    const m = readMode();
+    if (m && modes.includes(m)) return m;
+    return modes.includes('conflict') ? 'conflict' : modes[0];
+  });
   const [params, setParams] = useState<Params>(() => readParams(model.controls, base));
   const [isPlaying, setIsPlaying] = useState(!isReducedMotion);
   const [showControls, setShowControls] = useState(() => window.matchMedia('(min-width: 768px)').matches);
+  const [explain, setExplain] = useState(true);
+  const [showLegend, setShowLegend] = useState(true);
   const [showTheory, setShowTheory] = useState(() => readPanel() === 'sources');
   const [theoryLoaded, setTheoryLoaded] = useState(() => readPanel() === 'sources');
   const uid = useId();
@@ -46,10 +56,10 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sim = useRef(model.create()).current;
-  const live = useRef({ mode, params, motionScale: isReducedMotion ? 0.2 : 1 });
+  const live = useRef({ mode, params, motionScale: isReducedMotion ? 0.2 : 1, explain: true });
   const world = useRef({ width: 0, height: 0, time: 0, ready: false });
 
-  live.current = { mode, params, motionScale: isReducedMotion ? 0.2 : 1 };
+  live.current = { mode, params, motionScale: isReducedMotion ? 0.2 : 1, explain };
   const isPlayingRef = useRef(isPlaying);
   isPlayingRef.current = isPlaying;
 
@@ -58,11 +68,11 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
     const w = world.current;
     if (!ctx || !w.ready) return;
     w.time += 1 / 60;
-    sim.frame(ctx, { width: w.width, height: w.height, time: w.time, mode: live.current.mode, params: live.current.params, motionScale });
+    sim.frame(ctx, { width: w.width, height: w.height, time: w.time, mode: live.current.mode, params: live.current.params, motionScale, explain: live.current.explain });
   };
 
   const renderStill = () => {
-    for (let i = 0; i < STILL_FRAMES; i++) step(1);
+    for (let i = 0; i < (model.stillFrames ?? STILL_FRAMES); i++) step(1);
   };
 
   const reinit = () => {
@@ -127,7 +137,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   useEffect(() => {
     if (!isPlaying && isReducedMotion) renderStill();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, params]);
+  }, [mode, params, explain]);
 
   // Settings that change the number of bodies restart the simulation.
   const reinitKey = model.controls
@@ -242,6 +252,32 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
           </button>
           <button
             onClick={() => {
+              setExplain(!explain);
+              onAnnounce?.(`Tags ${!explain ? 'shown' : 'hidden'}`);
+            }}
+            aria-pressed={explain}
+            className={`p-2 border-2 border-xerox-ink transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center ${explain ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+            aria-label={explain ? 'Hide tags' : 'Show tags'}
+            title="Tags"
+          >
+            <Tags className="w-5 h-5" />
+          </button>
+          {model.legend && (
+            <button
+              onClick={() => {
+                setShowLegend(!showLegend);
+                onAnnounce?.(`Legend ${!showLegend ? 'shown' : 'hidden'}`);
+              }}
+              aria-pressed={showLegend}
+              className={`p-2 border-2 border-xerox-ink transition-all brutal-shadow-sm min-w-[44px] min-h-[44px] flex items-center justify-center ${showLegend ? 'bg-xerox-ink text-xerox-bg' : 'bg-xerox-bg text-xerox-ink'}`}
+              aria-label={showLegend ? 'Hide legend' : 'Show legend'}
+              title="Legend"
+            >
+              <List className="w-5 h-5" />
+            </button>
+          )}
+          <button
+            onClick={() => {
               setTheoryLoaded(true);
               setShowTheory(true);
               setPanel('sources');
@@ -269,8 +305,21 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
       <div className="relative flex-1 bg-black flex overflow-hidden min-h-0">
         <div ref={wrapRef} className="flex-1 relative overflow-hidden" role="img" aria-label={model.describe(mode)}>
           <canvas ref={canvasRef} className={`absolute inset-0 w-full h-full ${isHighVis ? '' : 'xerox-effect'}`} />
+          {showLegend && model.legend && (
+            <div className="hidden md:block absolute left-2 bottom-2 max-w-[580px] bg-black/80 text-xerox-bg border-2 border-xerox-bg/40 p-2 space-y-1" aria-label="Legend">
+              {model.legend.map((r) => (
+                <div key={r.see} className="flex gap-2 items-baseline text-[10px] leading-snug font-sans">
+                  <span className="inline-block w-2.5 h-2.5 shrink-0 translate-y-0.5" style={{ background: r.swatch }} aria-hidden="true" />
+                  <span>
+                    <b className="font-mono uppercase tracking-wider">{r.see}</b>: {r.physics}. <span className="opacity-90">ATP: {r.atp}.</span>
+                    {r.example && <span className="opacity-70"> e.g. {r.example}.</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           {isReducedMotion && !isPlaying && (
-            <span className="absolute left-2 bottom-2 bg-xerox-bg text-xerox-ink border-2 border-xerox-ink px-2 py-1 text-[9px] font-black uppercase tracking-widest">
+            <span className="absolute right-2 bottom-2 bg-xerox-bg text-xerox-ink border-2 border-xerox-ink px-2 py-1 text-[9px] font-black uppercase tracking-widest">
               Still frame (reduced motion). Press play to animate.
             </span>
           )}
@@ -289,7 +338,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
                 <div className="space-y-1.5" role="group" aria-labelledby={`${uid}-mode`}>
                   <span id={`${uid}-mode`} className={`${label} font-black uppercase tracking-widest block border-b border-xerox-ink pb-0.5`}>Operational Mode</span>
                   <div className="grid grid-cols-2 gap-1">
-                    {MODE_BUTTONS.map((b) => (
+                    {MODE_BUTTONS.filter((b) => modes.includes(b.mode)).map((b) => (
                       <button
                         key={b.mode}
                         onClick={() => setMode(b.mode)}
@@ -336,7 +385,15 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
           </div>
           <details>
             <summary className="text-[10px] font-black uppercase tracking-widest cursor-pointer min-h-[32px] flex items-center">What am I seeing?</summary>
-            <div className="grid grid-cols-1 gap-3 pt-2 max-h-[30vh] overflow-y-auto">{cards}</div>
+            <div className="grid grid-cols-1 gap-3 pt-2 max-h-[40vh] overflow-y-auto">
+              {cards}
+              {model.legend?.map((r) => (
+                <p key={r.see} className="text-[10px] leading-snug">
+                  <span className="inline-block w-2.5 h-2.5 mr-1" style={{ background: r.swatch }} aria-hidden="true" />
+                  <b className="uppercase">{r.see}</b>: {r.physics}. ATP: {r.atp}.{r.example ? ` e.g. ${r.example}.` : ''}
+                </p>
+              ))}
+            </div>
           </details>
         </div>
       </div>

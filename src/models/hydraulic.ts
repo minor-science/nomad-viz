@@ -1,213 +1,353 @@
 import { Droplets } from 'lucide-react';
-import type { ModelDef, SimInstance, Frame } from '../sim/types';
+import type { ModelDef, SimInstance, Frame, Mode, Params } from '../sim/types';
+import { Fluid, type FluidParams } from '../sim/fluid';
+import { Embankments } from '../sim/embankments';
+import { beginTags, drawTag, StickyTag } from '../sim/tags';
 
-interface Particle {
+// Grid height in cells. The width follows the canvas's aspect ratio.
+const NY = 72;
+// |curl| at which a tracer is drawn fully magenta.
+const CURL_REF = 0.12;
+// A channel counts as turbulent when its mean cross-flow passes this (cells per step).
+const TURBULENT = 0.012;
+// Where the embankments end in conflict mode, and where the town sits in each mode.
+const BANKS_END = 0.6;
+const TOWN = {
+  town: { entry: 0.42, exit: 0.6 },
+  conflict: { entry: 0.7, exit: 0.86 },
+};
+// Gate heights, as fractions of the depth: the entry is higher than the exit, so water crosses
+// the town on its way through.
+const ENTRY_Y = 0.4;
+const EXIT_Y = 0.62;
+
+interface Tracer {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
-  isWarded: boolean;
-  sizeMult: number;
-  speedMult: number;
-}
-
-interface Vortex {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  strength: number;
-  radius: number;
+  px: number;
+  py: number;
+  age: number;
   life: number;
 }
 
+const bankRows = (K: number, ny: number) => Array.from({ length: K - 1 }, (_, k) => Math.round(((k + 1) * ny) / K));
+
+// The fixed solid layout for each mode. Embankments in capture mode are fixed; in conflict they
+// are managed by Embankments, which erodes and rebuilds them. The town is a basin between two
+// walls, with an entry gate in the first and an exit gate in the second.
+function layout(mode: Mode, p: Params, nx: number, ny: number): (x: number, y: number) => boolean {
+  if (mode === 'state') {
+    const rows = bankRows(Math.round(p.channels), ny);
+    return (_x, y) => rows.includes(y);
+  }
+  if (mode === 'town' || mode === 'conflict') {
+    const t = TOWN[mode];
+    const a = Math.round(nx * t.entry);
+    const b = Math.round(nx * t.exit);
+    const half = p.gate / 2;
+    return (x, y) =>
+      ((x === a || x === a + 1) && Math.abs(y - ny * ENTRY_Y) > half) ||
+      ((x === b || x === b + 1) && Math.abs(y - ny * EXIT_Y) > half);
+  }
+  return () => false;
+}
+
+function lerpColor(t: number): string {
+  // cyan #00aeef to magenta #ec008c
+  const r = Math.round(236 * t);
+  const g = Math.round(174 - 174 * t);
+  const b = Math.round(239 - 99 * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 function create(): SimInstance {
-  let particles: Particle[] = [];
-  let vortices: Vortex[] = [];
+  let fluid: Fluid | null = null;
+  let tracers: Tracer[] = [];
+  let layoutKey = '';
+  let banks: Embankments | null = null;
+  let standing = 1;
+  let time = 0;
+  let flowMeter = 0;
+  let channelSpeed: number[] = [];
+  let channelCross: number[] = [];
+  let lastParams: FluidParams = { nu: 0, uTop: 1, uBottom: 0, clinamen: 0, confinement: 0 };
+  const vortexTag = new StickyTag<{ x: number; y: number }>(300);
+  const breachTag = new StickyTag<number>(300);
+  const bankTag = new StickyTag<number>(300);
+  // Streak trails fade on their own layer, so tags and the readout stay crisp on top.
+  let trail: HTMLCanvasElement | null = null;
+
+  const respawn = (t: Tracer) => {
+    if (!fluid) return;
+    // Enter where the water enters: rows are chosen in proportion to the inflow speed.
+    const umax = Math.max(Math.abs(lastParams.uTop), Math.abs(lastParams.uBottom)) + 0.05;
+    for (let k = 0; k < 40; k++) {
+      const y = 1 + Math.random() * (fluid.ny - 3);
+      const x = 1 + Math.random() * 2;
+      if (Math.random() > (Math.abs(fluid.inflow(y, lastParams)) + 0.05) / umax) continue;
+      if (!fluid.solid[Math.floor(x) + Math.floor(y) * fluid.nx]) {
+        t.x = t.px = x;
+        t.y = t.py = y;
+        break;
+      }
+    }
+    t.age = 0;
+    t.life = 300 + Math.random() * 500;
+  };
+
+  const spawnAnywhere = (t: Tracer) => {
+    if (!fluid) return;
+    t.x = t.px = 1 + Math.random() * (fluid.nx - 3);
+    t.y = t.py = 1 + Math.random() * (fluid.ny - 3);
+    t.age = (Math.random() * 300) | 0;
+    t.life = 300 + Math.random() * 500;
+  };
 
   return {
     init(width, height, params) {
-      particles = Array.from({ length: params.particleCount }, () => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() + 1) * 2,
-        vy: (Math.random() - 0.5) * 0.5,
-        isWarded: false,
-        sizeMult: 0.5 + Math.random() * 2.0,
-        speedMult: 0.5 + Math.random() * 2.0,
-      }));
-      vortices = [];
+      const nx = Math.max(64, Math.min(200, Math.round((NY * width) / height)));
+      fluid = new Fluid(nx, NY);
+      layoutKey = '';
+      banks = null;
+      time = 0;
+      tracers = Array.from({ length: params.tracers }, () => {
+        const t = { x: 0, y: 0, px: 0, py: 0, age: 0, life: 0 };
+        spawnAnywhere(t);
+        return t;
+      });
     },
 
     frame(ctx, f: Frame) {
-      const { width, height, time, mode, motionScale } = f;
-      const { intensity, vortexStrength, obstacleCount, obstacleSize, nomadIntensity, nomadSize } = f.params;
-
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.15)';
-      ctx.fillRect(0, 0, width, height);
-
-      const minDim = Math.min(width, height);
-      const effectiveObstacleSize = Math.min(obstacleSize, minDim * 0.15);
-
-      // Striated lines (State background)
-      if (mode === 'state' || mode === 'conflict') {
-        ctx.strokeStyle = 'rgba(59, 130, 246, 0.08)';
-        ctx.lineWidth = 1;
-        for (let y = 0; y < height; y += 40) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(width, y);
-          ctx.stroke();
-        }
+      if (!fluid) return;
+      const { mode, params, width, height, motionScale } = f;
+      const { nx, ny } = fluid;
+      const K = Math.round(params.channels);
+      const key = `${mode}|${K}|${params.gate}`;
+      if (key !== layoutKey) {
+        fluid.setSolid(layout(mode, params, nx, ny));
+        const rows = bankRows(K, ny);
+        banks = mode === 'conflict' ? new Embankments(fluid, (x, y) => x < nx * BANKS_END && rows.includes(y)) : null;
+        channelSpeed = new Array(K).fill(0);
+        channelCross = new Array(K).fill(0);
+        layoutKey = key;
       }
+      // The flood: the upper stream rises and falls once per season.
+      const season = params.season > 0 ? Math.sin((2 * Math.PI * time) / params.season) : 0;
+      const fp: FluidParams = {
+        nu: params.viscosity,
+        uTop: params.uTop * (1 + params.flood * season),
+        uBottom: params.uBottom,
+        clinamen: params.clinamen,
+        confinement: params.confinement,
+      };
+      lastParams = fp;
+      const steps = Math.max(1, Math.round(params.speed * motionScale));
+      for (let k = 0; k < steps; k++) {
+        fluid.step(fp);
+        time++;
+        if (banks) standing = banks.update(params.erosion, params.repair, params.critical);
+      }
+      flowMeter = 0.95 * flowMeter + 0.05 * fluid.crossflow();
 
-      // Warding obstacles
-      const obstacles: { x: number; y: number; r: number }[] = [];
-      if (mode === 'nonstate' || mode === 'conflict') {
-        const count = mode === 'conflict' ? Math.ceil(obstacleCount / 2) : obstacleCount;
-        for (let i = 0; i < count; i++) {
-          const ox = (Math.sin(time * 0.3 + i * 1.8) * 0.4 + 0.5) * width;
-          const oy = (Math.cos(time * 0.4 + i * 2.2) * 0.4 + 0.5) * height;
-          obstacles.push({ x: ox, y: oy, r: effectiveObstacleSize });
-
-          ctx.fillStyle = 'rgba(184, 134, 11, 0.1)';
-          ctx.beginPath();
-          ctx.arc(ox, oy, effectiveObstacleSize, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(184, 134, 11, 0.4)';
-          ctx.stroke();
-
-          // Vortex shedding from obstacles
-          if (mode === 'conflict' && Math.random() < 0.05 * intensity) {
-            vortices.push({
-              x: ox + effectiveObstacleSize,
-              y: oy + (Math.random() - 0.5) * effectiveObstacleSize,
-              vx: (1 + Math.random()) * intensity * 2,
-              vy: (Math.random() - 0.5) * intensity,
-              strength: (Math.random() > 0.5 ? 1 : -1) * vortexStrength,
-              radius: 40 + Math.random() * 60,
-              life: 1.0,
-            });
+      // Per-channel speed and cross-flow, over the stretch where embankments run.
+      const channeled = mode === 'state' || mode === 'conflict';
+      if (channeled) {
+        const rows = [0, ...bankRows(K, ny), ny - 1];
+        const xEnd = Math.round(nx * (mode === 'state' ? 0.95 : BANKS_END));
+        for (let c = 0; c < K; c++) {
+          let su = 0;
+          let sv = 0;
+          let n = 0;
+          for (let y = rows[c] + 1; y < rows[c + 1]; y++) {
+            for (let x = Math.round(xEnd * 0.4); x < xEnd; x++) {
+              const i = x + y * nx;
+              if (fluid.solid[i]) continue;
+              su += fluid.u[i];
+              sv += Math.abs(fluid.v[i]);
+              n++;
+            }
+          }
+          if (n) {
+            channelSpeed[c] = 0.9 * channelSpeed[c] + 0.1 * (su / n);
+            channelCross[c] = 0.9 * channelCross[c] + 0.1 * (sv / n);
           }
         }
       }
 
-      // Boundary-layer vortex generation (friction)
-      if (mode === 'nomad' || mode === 'conflict') {
-        if (Math.random() < 0.1 * intensity) {
-          const isTop = Math.random() > 0.5;
-          vortices.push({
-            x: 0,
-            y: isTop ? Math.random() * 50 : height - Math.random() * 50,
-            vx: (2 + Math.random()) * intensity * 2,
-            vy: (isTop ? 1 : -1) * Math.random() * intensity,
-            strength: (isTop ? 1 : -1) * vortexStrength,
-            radius: 30 + Math.random() * 50,
-            life: 1.0,
-          });
+      const sx = width / nx;
+      const sy = height / ny;
+
+      const main = ctx;
+      if (!trail || trail.width !== main.canvas.width || trail.height !== main.canvas.height) {
+        trail = document.createElement('canvas');
+        trail.width = main.canvas.width;
+        trail.height = main.canvas.height;
+      }
+      const tctx = trail.getContext('2d')!;
+      tctx.setTransform(main.getTransform());
+      {
+        const ctx = tctx;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.2)';
+        ctx.fillRect(0, 0, width, height);
+
+      // Walls and embankments; standing banks lighten as they wear, and breaches show faintly.
+      for (let y = 0; y < ny; y++) {
+        for (let x = 0; x < nx; x++) {
+          const i = x + y * nx;
+          const g = banks ? banks.integrity[i] : -1;
+          if (fluid.solid[i]) {
+            ctx.fillStyle = g >= 0 ? `rgba(148, 163, 184, ${0.35 + 0.65 * g})` : '#475569';
+            ctx.fillRect(x * sx, y * sy, sx + 0.5, sy + 0.5);
+          } else if (g >= 0) {
+            ctx.fillStyle = `rgba(148, 163, 184, ${0.15 * g})`;
+            ctx.fillRect(x * sx, y * sy, sx + 0.5, sy + 0.5);
+          }
         }
       }
 
-      // Update and draw vortices
-      vortices = vortices.filter((v) => v.life > 0);
-      vortices.forEach((v) => {
-        v.x += v.vx;
-        v.y += v.vy;
-        v.life -= 0.005;
-
-        ctx.fillStyle = `rgba(236, 0, 140, ${0.15 * v.life})`;
+      // Inflow: arrows along the left edge, as long as the water is fast.
+      ctx.strokeStyle = 'rgba(242, 242, 242, 0.75)';
+      ctx.fillStyle = 'rgba(242, 242, 242, 0.75)';
+      ctx.lineWidth = 2;
+      for (let y = 4; y < ny - 2; y += 6) {
+        const u = fluid.inflow(y, fp);
+        const len = Math.max(0, u) * 4 * sx;
+        if (len < 2) continue;
+        const yy = (y + 0.5) * sy;
         ctx.beginPath();
-        ctx.arc(v.x, v.y, v.radius * 0.3, 0, Math.PI * 2);
+        ctx.moveTo(2, yy);
+        ctx.lineTo(2 + len, yy);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(2 + len, yy);
+        ctx.lineTo(2 + len - 8, yy - 5);
+        ctx.lineTo(2 + len - 8, yy + 5);
         ctx.fill();
+      }
 
-        ctx.strokeStyle = `rgba(236, 0, 140, ${0.1 * v.life})`;
-        ctx.lineWidth = 1;
+      // Tracers ride the flow (midpoint rule) and are colored by the local vorticity,
+      // cyan where the flow runs in layers and magenta where it turns.
+      ctx.lineWidth = 2.5;
+      for (const t of tracers) {
+        t.px = t.x;
+        t.py = t.y;
+        for (let k = 0; k < steps; k++) {
+          const [u1, v1] = fluid.velocityAt(t.x, t.y);
+          const [u2, v2] = fluid.velocityAt(t.x + 0.5 * u1, t.y + 0.5 * v1);
+          t.x += u2;
+          t.y += v2;
+        }
+        t.age++;
+        const cell = Math.floor(t.x) + Math.floor(t.y) * nx;
+        if (t.x >= nx - 1.5 || t.x < 0.5 || t.y < 1 || t.y > ny - 2 || fluid.solid[cell] || t.age > t.life) {
+          respawn(t);
+          continue;
+        }
+        const w = Math.min(1, Math.abs(fluid.curlAt(t.x, t.y)) / CURL_REF);
+        ctx.strokeStyle = lerpColor(w);
         ctx.beginPath();
-        ctx.arc(v.x, v.y, v.radius, 0, Math.PI * 2);
+        ctx.moveTo(t.px * sx, t.py * sy);
+        ctx.lineTo(t.x * sx + (t.x - t.px) * sx * 1.5, t.y * sy + (t.y - t.py) * sy * 1.5);
         ctx.stroke();
-      });
+      }
 
-      particles.forEach((p, i) => {
-        let forceX = 0;
-        let forceY = 0;
-        let inVortex = false;
+      }
+      main.save();
+      main.setTransform(1, 0, 0, 1, 0, 0);
+      main.drawImage(trail, 0, 0);
+      main.restore();
 
-        // 1. Warding off laminar flow
-        let isWarded = false;
-        obstacles.forEach((o) => {
-          const dx = p.x - o.x;
-          const dy = p.y - o.y;
-          if (dx * dx + dy * dy < o.r * o.r) {
-            isWarded = true;
-            forceX += (Math.random() - 0.5) * 4 * intensity * motionScale;
-            forceY += (Math.random() - 0.5) * 4 * intensity * motionScale;
-            p.vx *= 0.8;
-            p.vy *= 0.8;
+      // Explain layer: each tag says what is happening and what it stands for.
+      if (f.explain) {
+        beginTags();
+        const bounds = { width, height };
+        drawTag(ctx, 6, (ny * 0.25) * sy, 'INFLOW · the river enters, faster on top, before anything channels or turns it', '#f2f2f2', bounds);
+        if (banks && season > 0.5) drawTag(ctx, nx * 0.3 * sx, 3 * sy, 'FLOOD · the river rises; banks erode where the stress passes critical', '#ec008c', bounds);
+        // A vortex, followed as it drifts with the water.
+        vortexTag.update(
+          (a) => {
+            const [u, v] = fluid!.velocityAt(a.x, a.y);
+            a.x += u * steps;
+            a.y += v * steps;
+            if (a.x > nx - 3 || a.y < 2 || a.y > ny - 3) return null;
+            return Math.abs(fluid!.curlAt(a.x, a.y)) > CURL_REF * 0.4 ? { x: a.x * sx, y: a.y * sy } : null;
+          },
+          () => {
+            let best = -1;
+            let vmax = CURL_REF * 0.8;
+            for (let y = 3; y < ny - 3; y += 2) {
+              for (let x = Math.round(nx * 0.25); x < nx - 4; x += 2) {
+                const i = x + y * nx;
+                const c = Math.abs(fluid!.curl[i]);
+                if (!fluid!.solid[i] && c > vmax) {
+                  vmax = c;
+                  best = i;
+                }
+              }
+            }
+            if (best < 0) return null;
+            const a = { x: best % nx, y: Math.floor(best / nx) };
+            return { anchor: a, x: a.x * sx, y: a.y * sy };
+          },
+        );
+        vortexTag.draw(ctx, 'WAR MACHINE · a vortex: turbulence holding open water as smooth space', '#ec008c', bounds, 'the vortex has spun down or drifted out');
+        if (channeled) {
+          const rows = [0, ...bankRows(K, ny), ny - 1];
+          const xEnd = mode === 'state' ? 0.9 : BANKS_END - 0.05;
+          for (let c = 0; c < K; c++) {
+            const h = rows[c + 1] - rows[c] - 1;
+            const u = channelSpeed[c];
+            const re = params.viscosity > 0 ? Math.round((Math.abs(u) * h) / params.viscosity) : null;
+            const turbulent = channelCross[c] > TURBULENT;
+            const nums = `speed ${u.toFixed(2)}${re !== null ? `, Re ${re}` : ''}`;
+            const label = turbulent
+              ? `WAR MACHINE · channel ${c + 1} has turned turbulent inside the conduit (${nums})`
+              : `CAPTURE · channel ${c + 1} runs in layers, the State's conduit (${nums})`;
+            drawTag(ctx, nx * xEnd * sx, ((rows[c] + rows[c + 1]) / 2) * sy, label, turbulent ? '#ec008c' : '#00aeef', bounds);
           }
-        });
-        p.isWarded = isWarded;
-
-        // 2. Nomad force (micro-eddies): every particle near a vortex is affected
-        vortices.forEach((v) => {
-          const dx = p.x - v.x;
-          const dy = p.y - v.y;
-          const distSq = dx * dx + dy * dy;
-          if (distSq < v.radius * v.radius) {
-            inVortex = true;
-            const dist = Math.sqrt(distSq);
-            const angle = Math.atan2(dy, dx) + Math.PI / 2;
-            const strength = (v.strength * 250 * nomadIntensity * p.speedMult * v.life) / (dist + 15);
-            forceX += Math.cos(angle) * strength * 0.3 * intensity * motionScale;
-            forceY += Math.sin(angle) * strength * 0.3 * intensity * motionScale;
-          }
-        });
-
-        // 3. State (laminar flow), only outside vortices and obstacles
-        const isStateParticle = mode === 'state' || (mode === 'conflict' && i % 2 === 0);
-        if (!isWarded && !inVortex && isStateParticle) {
-          const distToEdge = Math.min(p.y, height - p.y);
-          const friction = Math.max(0.2, Math.min(1, distToEdge / 100));
-          forceX += 0.2 * intensity * friction * motionScale;
-          forceY += Math.sin(p.x * 0.01 + time) * 0.05 * intensity * motionScale;
-          p.vy *= 0.95;
         }
-
-        // 4. Nomad jitter
-        const isNomadParticle = mode === 'nomad' || (mode === 'conflict' && i % 2 !== 0);
-        if (isNomadParticle || inVortex) {
-          forceX += (Math.random() - 0.5) * 0.5 * nomadIntensity * p.speedMult * motionScale;
-          forceY += (Math.random() - 0.5) * 0.5 * nomadIntensity * p.speedMult * motionScale;
+        if (banks) {
+          const bk = banks;
+          breachTag.update(
+            (i) => (!fluid!.solid[i] && bk.integrity[i] >= 0 ? { x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy } : null),
+            () => {
+              for (let i = 0; i < fluid!.n; i++) if (bk.integrity[i] >= 0 && !fluid!.solid[i]) return { anchor: i, x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy };
+              return null;
+            },
+          );
+          breachTag.draw(ctx, 'WAR MACHINE · a breach: smooth space overspills the bank, until repair', '#ec008c', bounds, 'CAPTURE · the breach is repaired, the bank stands again');
+          bankTag.update(
+            (i) => (fluid!.solid[i] && bk.integrity[i] >= 0 ? { x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy } : null),
+            () => {
+              for (let i = Math.round(nx * 0.3); i < fluid!.n; i++) if (bk.integrity[i] >= 0 && fluid!.solid[i]) return { anchor: i, x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy };
+              return null;
+            },
+          );
+          bankTag.draw(ctx, 'CAPTURE · an embankment, kept in repair to prevent turbulence', '#00aeef', bounds, 'WAR MACHINE · this bank has just given way');
         }
-
-        p.vx += forceX;
-        p.vy += forceY;
-        p.vx *= 0.98;
-        p.vy *= 0.98;
-        p.x += p.vx;
-        p.y += p.vy;
-
-        // Boundary and respawn
-        if (p.x > width) {
-          p.x = 0;
-          p.y = Math.random() * height;
-          p.vx = 2;
+        if (mode === 'town' || mode === 'conflict') {
+          const t = TOWN[mode];
+          drawTag(ctx, nx * t.entry * sx, ny * ENTRY_Y * sy, 'POLARIZATION · all water enters the town by this gate', '#2f8f4e', bounds);
+          drawTag(ctx, nx * t.exit * sx, ny * EXIT_Y * sy, 'POLARIZATION · and leaves by this one, after circling the basin', '#2f8f4e', bounds);
         }
-        if (p.x < 0) p.x = width;
-        if (p.y < 0) p.y = height;
-        if (p.y > height) p.y = 0;
+      }
 
-        let color = '#00aeef';
-        if (isWarded) color = '#b8860b';
-        else if (inVortex || isNomadParticle) color = '#ec008c';
-
-        ctx.strokeStyle = color;
-        const isNomad = inVortex || isNomadParticle;
-        ctx.lineWidth = (isWarded ? 2 : isNomad ? nomadSize : 1.5) * p.sizeMult;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x - p.vx * 2.5, p.y - p.vy * 2.5);
-        ctx.stroke();
-      });
+      // Readout
+      const h = mode === 'state' ? ny / K : ny;
+      const dU = Math.abs(fp.uTop - params.uBottom);
+      const re = params.viscosity > 0 ? `Re = ΔU·h/ν ≈ ${Math.round((dU * h) / params.viscosity)}` : 'Re set by the grid (ν = 0)';
+      const pad = 16;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+      ctx.fillRect(pad, pad, 560, banks ? 108 : 84);
+      ctx.font = 'bold 22px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#f2f2f2';
+      ctx.fillText(`CROSS-FLOW  ${flowMeter.toFixed(3)}`, pad + 14, pad + 32);
+      ctx.font = '18px "JetBrains Mono", monospace';
+      ctx.fillStyle = '#9ca3af';
+      ctx.fillText(`${mode === 'state' ? `channel ${h.toFixed(0)} cells` : `open ${h} cells`}  ·  ${re}`, pad + 14, pad + 60);
+      if (banks) {
+        ctx.fillText(`embankments standing ${(standing * 100).toFixed(0)}%  ·  river ${fp.uTop.toFixed(2)}${season > 0.5 ? '  FLOOD' : ''}`, pad + 14, pad + 86);
+      }
     },
   };
 }
@@ -220,24 +360,42 @@ export const hydraulic: ModelDef = {
   headerIcon: Droplets,
   title: 'Hydraulic Metaphysics',
   subtitle: 'Laminar Flow // Turbulence',
-  describe: (mode) => `Hydraulic Metaphysics Simulation: A fluid dynamic visualization showing ${mode} interactions.`,
+  modes: ['state', 'nomad', 'town', 'conflict'],
+  stillFrames: 450,
+  describe: (mode) =>
+    `Hydraulic simulation: water entering from the left, a faster stream over a slower one, in ${mode} mode. Tracers are cyan where the flow runs in layers and magenta where it turns.`,
   controls: [
-    { kind: 'slider', key: 'particleCount', label: 'Flow Density', min: 200, max: 2000, step: 100, default: 1200, tint: 'magenta', format: 'int', reinit: true },
-    { kind: 'slider', key: 'nomadIntensity', label: 'Nomad Intensity', min: 0.1, max: 5, step: 0.1, default: 0.5, tint: 'magenta', format: 'pct' },
-    { kind: 'slider', key: 'nomadSize', label: 'Nomad Size', min: 0, max: 15, step: 0.1, default: 1.5, tint: 'magenta', format: 'px' },
-    { kind: 'slider', key: 'vortexStrength', label: 'Vortex Strength', min: 0.1, max: 10, step: 0.1, default: 1, tint: 'cyan', format: 'pct' },
-    { kind: 'slider', key: 'obstacleCount', label: 'Obstacle Count', min: 1, max: 40, step: 1, default: 10, tint: 'yellow', format: 'int' },
-    { kind: 'slider', key: 'obstacleSize', label: 'Obstacle Size', min: 0, max: 300, step: 5, default: 45, tint: 'yellow', format: 'px' },
-    { kind: 'slider', key: 'intensity', label: 'Global Intensity', min: 0.1, max: 1, step: 0.05, default: 0.5, tint: 'ink', format: 'pct', divider: true },
+    { kind: 'slider', key: 'uTop', label: 'Upper Stream Speed', min: 0.2, max: 1.5, step: 0.05, default: 0.7, tint: 'ink', format: 'dec2' },
+    { kind: 'slider', key: 'uBottom', label: 'Lower Stream Speed', min: 0, max: 1.2, step: 0.05, default: 0.15, tint: 'ink', format: 'dec2' },
+    { kind: 'slider', key: 'viscosity', label: 'Viscosity ν', min: 0, max: 0.05, step: 0.001, default: 0.002, tint: 'ink', format: 'dec3' },
+    { kind: 'slider', key: 'clinamen', label: 'Clinamen (inlet swerve)', min: 0, max: 0.3, step: 0.01, default: 0.1, tint: 'magenta', format: 'dec2' },
+    { kind: 'slider', key: 'channels', label: 'Channels', min: 2, max: 8, step: 1, default: 4, tint: 'cyan', format: 'int' },
+    { kind: 'slider', key: 'flood', label: 'Flood (seasonal rise)', min: 0, max: 1, step: 0.05, default: 0.6, tint: 'magenta', format: 'pct' },
+    { kind: 'slider', key: 'season', label: 'Season (steps)', min: 0, max: 2000, step: 50, default: 600, tint: 'ink', format: 'int' },
+    { kind: 'slider', key: 'critical', label: 'Critical Stress (banks)', min: 0.2, max: 1.5, step: 0.05, default: 0.6, tint: 'cyan', format: 'dec2' },
+    { kind: 'slider', key: 'erosion', label: 'Erosion Rate', min: 0, max: 0.5, step: 0.01, default: 0.05, tint: 'magenta', format: 'dec2' },
+    { kind: 'slider', key: 'repair', label: 'Repair Rate', min: 0, max: 0.05, step: 0.001, default: 0.01, tint: 'cyan', format: 'dec3' },
+    { kind: 'slider', key: 'gate', label: 'Gate Width (cells)', min: 2, max: 40, step: 1, default: 8, tint: 'green', format: 'int' },
+    { kind: 'slider', key: 'confinement', label: 'Vorticity Confinement', min: 0, max: 0.1, step: 0.005, default: 0, tint: 'ink', format: 'dec3' },
+    { kind: 'slider', key: 'tracers', label: 'Tracers', min: 500, max: 4000, step: 250, default: 2000, tint: 'ink', format: 'int', reinit: true },
+    { kind: 'slider', key: 'speed', label: 'Steps per Frame', min: 1, max: 3, step: 1, default: 2, tint: 'ink', format: 'int', divider: true },
   ],
   status: (p) => [
-    ['Flow', `${(p.intensity * 100).toFixed(0)}%`],
-    ['Particles', String(p.particleCount)],
+    ['ν', p.viscosity.toFixed(3)],
+    ['Flood', `${Math.round(p.flood * 100)}%`],
   ],
   cards: [
-    { process: 'capture', heading: '01 / Capture', text: 'Laminar flow. Particles run in parallel layers, slower near the edges, as in a channel. ATP: the State needs “conduits, pipes, embankments, which prevent turbulence” (363).' },
-    { process: 'warMachine', heading: '02 / War machine', text: 'Vortices. Eddies carry particles across the layers. ATP: nomad science is “distributed by turbulence across a smooth space” (363).' },
-    { process: 'wardingOff', heading: '03 / Warding off', text: 'Obstacles. Moving zones agitate the particles that enter them. In conflict mode they also shed vortices, which ATP would count as the war machine, not warding off (see Sources).' },
+    { process: 'capture', heading: '01 / Capture', text: 'Embankments. The stream, split into narrow channels, runs in layers, since a narrow channel has a low Reynolds number. ATP: the State needs “conduits, pipes, embankments, which prevent turbulence” (363).' },
+    { process: 'warMachine', heading: '02 / War machine', text: 'Turbulence. In open water the faster stream rolls up over the slower one from a small swerve at the inlet, and floods breach the banks. ATP: a movement “distributed by turbulence across a smooth space” (363).' },
+    { process: 'polarization', heading: '03 / Polarization', text: 'The town. Water must enter by one gate and leave by another, circling through the basin between. ATP: the town “is defined by entries and exits; something must enter it and exit from it” (432).' },
+  ],
+  legend: [
+    { swatch: '#f2f2f2', see: 'Arrows at the left', physics: 'the inflow, longer where the water is faster', atp: 'the flow before it is channeled or turned', example: 'a river entering a floodplain' },
+    { swatch: '#00aeef', see: 'Cyan streaks', physics: 'flow running in parallel layers (laminar)', atp: 'striated space, flows that “proceed by parallel, laminar layers” (363)', example: 'the canals and dikes of Wittfogel’s hydraulic empires' },
+    { swatch: '#ec008c', see: 'Magenta streaks', physics: 'water turning in eddies (high vorticity)', atp: 'smooth space, a movement “distributed by turbulence” (363)', example: 'the steppe, the desert, the sea' },
+    { swatch: '#94a3b8', see: 'Gray banks', physics: 'no-slip walls that narrow the flow and lower its Reynolds number; they fade as they erode', atp: 'capture: “conduits, pipes, embankments, which prevent turbulence” (363)', example: 'a flood breaching dikes, and the dikes rebuilt' },
+    { swatch: '#2f8f4e', see: 'Two walls with gates', physics: 'water forced in at one gate and out at another, circling the basin between', atp: 'polarization: the town “is defined by entries and exits” (432)', example: 'market towns and ports, such as the Hanse and Venice' },
+    { swatch: '#475569', see: 'Channel tags', physics: 'each channel’s speed, Reynolds number, and measured state (laminar or turbulent)', atp: 'the same water striated or smooth depending on the space it is given' },
   ],
   create,
 };
