@@ -232,11 +232,13 @@ function create(): SimInstance {
       };
       // Heavy bodies are drawn by mass; a body that crossed over keeps a ring in the color it came from.
       const heavy = (i: number) => orbits!.isCompany[i] === 1 || orbits!.isState[i] === 1;
-      const radius = (i: number) => (heavy(i) ? 5 + 1.6 * Math.sqrt(orbits!.m[i]) : 7);
+      // Companies and small States are drawn only a little larger than a body, so that size on
+      // screen never suggests they outweigh the capital city.
+      const radius = (i: number) => (heavy(i) ? 5 + 0.6 * Math.sqrt(orbits!.m[i]) : 6);
       for (let i = 0; i < orbits.n; i++) {
         if (Math.abs(orbits.x[i] - px[i]) > 15 || Math.abs(orbits.y[i] - py[i]) > 15) continue;
         tctx.strokeStyle = colorOf(i);
-        tctx.lineWidth = heavy(i) ? 10 : 4;
+        tctx.lineWidth = heavy(i) ? 5 : 3;
         tctx.beginPath();
         tctx.moveTo(px[i] * sx, py[i] * sy);
         tctx.lineTo(orbits.x[i] * sx, orbits.y[i] * sy);
@@ -272,7 +274,7 @@ function create(): SimInstance {
         const origin = orbits.kind[i] === ARMY ? MAGENTA : orbits.isState[i] || orbits.isBorn[i] ? YELLOW : null;
         if (origin) {
           ctx.strokeStyle = origin;
-          ctx.lineWidth = 5;
+          ctx.lineWidth = 3;
           ctx.stroke();
         }
       }
