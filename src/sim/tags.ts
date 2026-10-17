@@ -3,9 +3,19 @@
 // call beginTags() before drawing a frame's tags.
 
 let placed: { x: number; y: number; w: number; h: number }[] = [];
+let shown = new Set<string>();
+
+// A tag's process sets its color, and only one tag per process shows at a time.
+const PROCESS_COLOR: Record<string, string> = {
+  CAPTURE: '#00aeef',
+  'WAR MACHINE': '#ec008c',
+  'WARDING OFF': '#e0a800',
+  POLARIZATION: '#2f8f4e',
+};
 
 export function beginTags() {
   placed = [];
+  shown = new Set();
 }
 
 /** Mark an area (a readout, a caption) that tags should keep clear of. */
@@ -24,6 +34,12 @@ export function drawTag(
   color: string,
   bounds: { width: number; height: number },
 ) {
+  const kind = text.split(' · ')[0];
+  if (kind in PROCESS_COLOR) {
+    if (shown.has(kind)) return;
+    shown.add(kind);
+    color = PROCESS_COLOR[kind];
+  }
   ctx.save();
   ctx.font = 'bold 20px "JetBrains Mono", monospace';
   const w = ctx.measureText(text).width + 16;
@@ -179,4 +195,87 @@ export function drawPlace(ctx: CanvasRenderingContext2D, x: number, y: number, t
   ctx.textAlign = 'center';
   ctx.fillText(text, x, y);
   ctx.restore();
+}
+
+export interface Series {
+  values: number[];
+  color: string;
+  label: string;
+}
+
+// The narrator's panel: a headline, an ATP line, and an optional chart of named series (each
+// scaled 0 to 1) with a key. Reserves its area so tags keep clear. Returns its height. World units.
+export function drawPanel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  head: string,
+  sub: string,
+  color: string,
+  series: Series[] = [],
+  span = 600,
+): number {
+  const wrap = (text: string, font: string) => {
+    ctx.font = font;
+    const lines: string[] = [];
+    let line = '';
+    for (const word of text.split(' ')) {
+      const t = line ? `${line} ${word}` : word;
+      if (ctx.measureText(t).width > w - 32 && line) {
+        lines.push(line);
+        line = word;
+      } else line = t;
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
+  const headFont = 'bold 22px "JetBrains Mono", monospace';
+  const subFont = '19px "Inter", sans-serif';
+  const hl = wrap(head, headFont);
+  const sl = wrap(sub, subFont);
+  const chartH = series.length ? 74 : 0;
+  const keyH = series.length ? 26 : 0;
+  const h = 20 + hl.length * 28 + sl.length * 25 + (series.length ? 14 + chartH + keyH : 4);
+  reserve(x, y, w, h);
+  ctx.save();
+  ctx.fillStyle = 'rgba(5, 5, 5, 0.82)';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 6, h);
+  ctx.font = headFont;
+  hl.forEach((l, k) => ctx.fillText(l, x + 18, y + 30 + k * 28));
+  ctx.font = subFont;
+  ctx.fillStyle = '#d1d5db';
+  sl.forEach((l, k) => ctx.fillText(l, x + 18, y + 30 + hl.length * 28 + k * 25));
+  if (series.length) {
+    const cx = x + 18;
+    const cy = y + 22 + hl.length * 28 + sl.length * 25 + 10;
+    const cw = w - 36;
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx, cy, cw, chartH);
+    for (const s of series) {
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      s.values.forEach((v, k) => {
+        const px = cx + (k / Math.max(1, span - 1)) * cw;
+        const py = cy + chartH - Math.max(0, Math.min(1, v)) * chartH;
+        if (k === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+    }
+    ctx.font = '17px "JetBrains Mono", monospace';
+    let kx = cx;
+    for (const s of series) {
+      ctx.fillStyle = s.color;
+      ctx.fillRect(kx, cy + chartH + 10, 14, 4);
+      ctx.fillText(s.label, kx + 20, cy + chartH + 20);
+      kx += 20 + ctx.measureText(s.label).width + 24;
+    }
+  }
+  ctx.restore();
+  return h;
 }

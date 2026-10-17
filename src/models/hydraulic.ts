@@ -2,7 +2,7 @@ import { Droplets } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Params } from '../sim/types';
 import { Fluid, type FluidParams } from '../sim/fluid';
 import { Embankments } from '../sim/embankments';
-import { beginTags, reserve, drawCaption, drawPlace, drawTag, StickyTag } from '../sim/tags';
+import { beginTags, drawPanel, drawPlace, drawTag, StickyTag, type Series } from '../sim/tags';
 
 // Grid height in cells. The width follows the canvas's aspect ratio.
 const NY = 72;
@@ -118,6 +118,8 @@ function create(): SimInstance {
   let lastParams: FluidParams = { nu: 0, uTop: 1, uBottom: 0, clinamen: 0, confinement: 0 };
   const vortexTag = new StickyTag<{ x: number; y: number }>(300);
   let phase: Phase = 'regulated';
+  const history = { held: [] as number[], off: [] as number[], surge: [] as number[] };
+  const SPAN = 600;
   let phaseAge = 0;
   const breachTag = new StickyTag<number>(300);
   const bankTag = new StickyTag<number>(300);
@@ -195,6 +197,15 @@ function create(): SimInstance {
         if (banks) standing = banks.update(params.erosion, params.repair, params.critical);
       }
       flowMeter = 0.95 * flowMeter + 0.05 * fluid.crossflow();
+      // The panel's chart: routes held, flows off-route, and the seasonal surge, each 0 to 1.
+      history.held.push(mode === 'conflict' ? standing : mode === 'state' ? 1 : 0);
+      history.off.push(Math.min(1, flowMeter / 0.08));
+      history.surge.push(mode === 'conflict' ? 0.5 + 0.5 * season : 0);
+      if (history.held.length > SPAN) {
+        history.held.shift();
+        history.off.shift();
+        history.surge.shift();
+      }
 
       // Per-channel speed and cross-flow, over the stretch where embankments run.
       const channeled = mode === 'state' || mode === 'conflict';
@@ -308,7 +319,6 @@ function create(): SimInstance {
       // feature stands for.
       if (f.explain) {
         beginTags();
-        reserve(16, 16, 560, 108);
         const bounds = { width, height };
         const place = (fx: number, fy: number, text: string) => drawPlace(ctx, fx * width, fy * height, text);
         if (mode === 'state') place(0.5, 0.58, 'THE STATE’S CHANNELS');
@@ -338,14 +348,35 @@ function create(): SimInstance {
           cap = PHASES[phase];
         }
         if (cap) {
-          const cw = Math.min(width - 32, Math.max(560, width * 0.46));
-          const cx = width - cw - 16;
-          drawCaption(ctx, cx, 16, cw, cap.head, cap.sub, cap.color);
+          const series: Series[] = [];
+          if (mode === 'conflict' || mode === 'state') series.push({ values: history.held, color: '#00aeef', label: 'routes held' });
+          series.push({ values: history.off, color: '#ec008c', label: 'flows off-route' });
+          if (mode === 'conflict') series.push({ values: history.surge, color: '#f2f2f2', label: 'surge' });
+          drawPanel(ctx, 16, 16, Math.min(width - 32, Math.max(640, width * 0.5)), cap.head, cap.sub, cap.color, series, SPAN);
         }
         drawTag(ctx, 6, (ny * 0.25) * sy, 'INFLOW · flows of people, goods, and labor', '#f2f2f2', bounds);
         if (banks && season > 0.5) drawTag(ctx, nx * 0.3 * sx, 3 * sy, 'SURGE · migration and flight beyond what the routes can hold', '#ec008c', bounds);
-        // A vortex, followed as it drifts with the water.
-        vortexTag.update(
+        if (banks) {
+          const bk = banks;
+          breachTag.update(
+            (i) => (!fluid!.solid[i] && bk.integrity[i] >= 0 ? { x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy } : null),
+            () => {
+              for (let i = 0; i < fluid!.n; i++) if (bk.integrity[i] >= 0 && !fluid!.solid[i]) return { anchor: i, x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy };
+              return null;
+            },
+          );
+          breachTag.draw(ctx, 'WAR MACHINE · a route breaks down; flows go their own way', '#ec008c', bounds, 'CAPTURE · the State re-routes and re-registers them', '#00aeef');
+          bankTag.update(
+            (i) => (fluid!.solid[i] && bk.integrity[i] >= 0 ? { x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy } : null),
+            () => {
+              for (let i = Math.round(nx * 0.3); i < fluid!.n; i++) if (bk.integrity[i] >= 0 && fluid!.solid[i]) return { anchor: i, x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy };
+              return null;
+            },
+          );
+          bankTag.draw(ctx, 'CAPTURE · a fixed path that regulates circulation', '#00aeef', bounds, 'WAR MACHINE · the path gives way', '#ec008c');
+        }
+        // A vortex, followed as it drifts with the water (only where the war machine is staged).
+        if (mode === 'nomad' || mode === 'conflict') vortexTag.update(
           (a) => {
             const [u, v] = fluid!.velocityAt(a.x, a.y);
             a.x += u * steps;
@@ -371,7 +402,7 @@ function create(): SimInstance {
             return { anchor: a, x: a.x * sx, y: a.y * sy };
           },
         );
-        vortexTag.draw(ctx, 'WAR MACHINE · a band holds its own ground, off the assigned routes', '#ec008c', bounds, 'the band disperses');
+        if (mode === 'nomad' || mode === 'conflict') vortexTag.draw(ctx, 'WAR MACHINE · a band holds its own ground, off the assigned routes', '#ec008c', bounds, 'the band disperses');
         if (channeled) {
           const rows = [0, ...bankRows(K, ny), ny - 1];
           const xEnd = mode === 'state' ? 0.9 : BANKS_END - 0.05;
@@ -387,48 +418,12 @@ function create(): SimInstance {
             drawTag(ctx, nx * xEnd * sx, ((rows[c] + rows[c + 1]) / 2) * sy, label, turbulent ? '#ec008c' : '#00aeef', bounds);
           }
         }
-        if (banks) {
-          const bk = banks;
-          breachTag.update(
-            (i) => (!fluid!.solid[i] && bk.integrity[i] >= 0 ? { x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy } : null),
-            () => {
-              for (let i = 0; i < fluid!.n; i++) if (bk.integrity[i] >= 0 && !fluid!.solid[i]) return { anchor: i, x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy };
-              return null;
-            },
-          );
-          breachTag.draw(ctx, 'WAR MACHINE · a route breaks down; flows go their own way', '#ec008c', bounds, 'CAPTURE · the State re-routes and re-registers them', '#00aeef');
-          bankTag.update(
-            (i) => (fluid!.solid[i] && bk.integrity[i] >= 0 ? { x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy } : null),
-            () => {
-              for (let i = Math.round(nx * 0.3); i < fluid!.n; i++) if (bk.integrity[i] >= 0 && fluid!.solid[i]) return { anchor: i, x: ((i % nx) + 0.5) * sx, y: (Math.floor(i / nx) + 0.5) * sy };
-              return null;
-            },
-          );
-          bankTag.draw(ctx, 'CAPTURE · a fixed path that regulates circulation', '#00aeef', bounds, 'WAR MACHINE · the path gives way', '#ec008c');
-        }
         if (mode === 'town' || mode === 'conflict') {
           const t = TOWN[mode];
-          drawTag(ctx, nx * t.entry * sx, ny * ENTRY_Y * sy, 'POLARIZATION · the market town: everything enters by its gate, as at Venice', '#2f8f4e', bounds);
-          drawTag(ctx, nx * t.exit * sx, ny * EXIT_Y * sy, 'POLARIZATION · and leaves by another, toward other towns', '#2f8f4e', bounds);
+          drawTag(ctx, nx * t.entry * sx, ny * ENTRY_Y * sy, 'POLARIZATION · the market town: everything enters by one gate and leaves by another, as at Venice', '#2f8f4e', bounds);
         }
       }
 
-      // Readout
-      const h = mode === 'state' ? ny / K : ny;
-      const dU = Math.abs(fp.uTop - params.uBottom);
-      const re = params.viscosity > 0 ? `Re = ΔU·h/ν ≈ ${Math.round((dU * h) / params.viscosity)}` : 'Re set by the grid (ν = 0)';
-      const pad = 16;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
-      ctx.fillRect(pad, pad, 560, banks ? 108 : 84);
-      ctx.font = 'bold 22px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#f2f2f2';
-      ctx.fillText(`CROSS-FLOW  ${flowMeter.toFixed(3)}`, pad + 14, pad + 32);
-      ctx.font = '18px "JetBrains Mono", monospace';
-      ctx.fillStyle = '#9ca3af';
-      ctx.fillText(`${mode === 'state' ? `channel ${h.toFixed(0)} cells` : `open ${h} cells`}  ·  ${re}`, pad + 14, pad + 60);
-      if (banks) {
-        ctx.fillText(`embankments standing ${(standing * 100).toFixed(0)}%  ·  river ${fp.uTop.toFixed(2)}${season > 0.5 ? '  FLOOD' : ''}`, pad + 14, pad + 86);
-      }
     },
   };
 }
