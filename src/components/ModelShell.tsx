@@ -3,7 +3,7 @@ import {
   WORLD_SCALE, DEFAULT_MODES, defaults, formatValue,
   type ControlSpec, type Mode, type ModelDef, type Narration, type Params, type Tint,
 } from '../sim/types';
-import { readMode, readPanel, readParams, setPanel, writeState } from '../sim/url';
+import { readMode, readParams, setPanel, writeState } from '../sim/url';
 import { Book } from './Book';
 import { splitHead } from './plain';
 
@@ -36,9 +36,11 @@ interface Props {
   onAnnounce?: (msg: string) => void;
   onReducedMotion?: (on: boolean) => void;
   onHighVis?: (on: boolean) => void;
+  sourcesOpen?: boolean;
+  onSources?: (open: boolean) => void;
 }
 
-export function ModelShell({ model, isReducedMotion = false, isHighVis = false, onAnnounce, onReducedMotion, onHighVis }: Props) {
+export function ModelShell({ model, isReducedMotion = false, isHighVis = false, onAnnounce, onReducedMotion, onHighVis, sourcesOpen = false, onSources }: Props) {
   const base = useMemo(() => defaults(model.controls), [model]);
   const modes = model.modes ?? DEFAULT_MODES;
   const [mode, setMode] = useState<Mode>(() => {
@@ -58,8 +60,13 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   // The legend starts open on wide screens and closed on phones, where it would cover the canvas.
   const [showLegend, setShowLegend] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [narration, setNarration] = useState<Narration | null>(null);
-  const [showTheory, setShowTheory] = useState(() => readPanel() === 'sources');
-  const [theoryLoaded, setTheoryLoaded] = useState(() => readPanel() === 'sources');
+  // Sources opens from the top bar (in App); the panel itself belongs to the model.
+  const showTheory = sourcesOpen;
+  const [theoryLoaded, setTheoryLoaded] = useState(sourcesOpen);
+  useEffect(() => {
+    if (sourcesOpen) setTheoryLoaded(true);
+    setPanel(sourcesOpen ? 'sources' : null);
+  }, [sourcesOpen]);
   const uid = useId();
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -315,16 +322,6 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
               Legend
             </button>
           )}
-          <button
-            onClick={() => {
-              setTheoryLoaded(true);
-              setShowTheory(true);
-              setPanel('sources');
-            }}
-            className={toggle(false)}
-          >
-            Sources
-          </button>
           <button onClick={() => setShowControls(!showControls)} aria-expanded={showControls} className={toggle(showControls)}>
             Controls
           </button>
@@ -426,10 +423,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
 
       {theoryLoaded && (
         <Suspense fallback={null}>
-          <SourcesPanel modelType={model.id} isOpen={showTheory} onClose={() => {
-            setShowTheory(false);
-            setPanel(null);
-          }} isHighVis={isHighVis} />
+          <SourcesPanel modelType={model.id} isOpen={showTheory} onClose={() => onSources?.(false)} isHighVis={isHighVis} />
         </Suspense>
       )}
     </div>

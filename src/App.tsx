@@ -8,7 +8,7 @@ import { useState } from 'react';
 
 import ModelShell from './components/ModelShell';
 import { MODELS, MODEL, isModelId } from './models';
-import { readModel } from './sim/url';
+import { readModel, readPanel } from './sim/url';
 import type { ModelId } from './sim/types';
 import { BIBLIOGRAPHY } from './content/bibliography';
 
@@ -21,6 +21,7 @@ export default function App() {
     return isModelId(m) ? m : 'metallurgic';
   });
   const [showAbout, setShowAbout] = useState(false);
+  const [showSources, setShowSources] = useState(() => readPanel() === 'sources');
   const [highContrast, setHighContrast] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [announcement, setAnnouncement] = useState('');
@@ -51,9 +52,14 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <button onClick={() => setShowAbout(true)} className="ml-auto text-sm text-white/60 hover:text-white">
-          About
-        </button>
+        <div className="ml-auto flex gap-4 shrink-0">
+          <button onClick={() => setShowSources(true)} className="text-sm text-white/60 hover:text-white">
+            Sources
+          </button>
+          <button onClick={() => setShowAbout(true)} className="text-sm text-white/60 hover:text-white">
+            About
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 min-h-0 min-w-0" aria-label={`${MODEL[activeModel].name} model`}>
@@ -65,6 +71,8 @@ export default function App() {
           onAnnounce={setAnnouncement}
           onReducedMotion={setReducedMotion}
           onHighVis={setHighContrast}
+          sourcesOpen={showSources}
+          onSources={setShowSources}
         />
       </main>
 
