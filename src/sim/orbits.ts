@@ -146,17 +146,17 @@ export class Orbits {
     }
   }
 
-  /** Send in a company from the left or right edge. A raider aims at the capital city; any other
-   *  company aims at a point on the far edge, crossing open ground. */
+  /** Send in a company from the left or right edge, heading for the capital city: a raider aims
+   *  straight through its center, and any other company at a point beside it, passing within
+   *  reach of its gates and its crowd. */
   addCompany(speed: number, raid = false, mass = this.companyMass) {
     if (this.n >= this.cap) return;
     const i = this.n++;
     const fromLeft = this.rand() < 0.5;
     this.x[i] = fromLeft ? 1 : this.w - 1;
     this.y[i] = this.h * (0.1 + 0.8 * this.rand());
-    const aim = raid
-      ? Math.atan2(this.cy + (this.rand() - 0.5) * 8 - this.y[i], this.cx - this.x[i])
-      : Math.atan2(this.h * (0.1 + 0.8 * this.rand()) - this.y[i], (fromLeft ? this.w : 0) - this.x[i]);
+    const miss = raid ? (this.rand() - 0.5) * 8 : (this.rand() < 0.5 ? -1 : 1) * (6 + 12 * this.rand());
+    const aim = Math.atan2(this.cy + miss - this.y[i], this.cx - this.x[i]);
     this.vx[i] = Math.cos(aim) * speed;
     this.vy[i] = Math.sin(aim) * speed;
     this.m[i] = mass;

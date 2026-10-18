@@ -138,6 +138,30 @@ export class Fluid {
     return this.sample(this.curl, x, y);
   }
 
+  /**
+   * A puff: two opposite swirls stacked one above the other at (cx, cy), each of radius r, which
+   * together kick the liquid forward and churn it, as a disturbance at a pipe's inlet sets off a
+   * turbulent puff that the flow then carries downstream.
+   */
+  addPuff(cx: number, cy: number, r: number, s: number) {
+    const { nx, ny, u, v, solid } = this;
+    for (const [oy, sign] of [[-r * 0.6, 1], [r * 0.6, -1]] as const) {
+      for (let y = Math.max(1, Math.floor(cy + oy - r)); y <= Math.min(ny - 2, Math.ceil(cy + oy + r)); y++) {
+        for (let x = Math.max(1, Math.floor(cx - r)); x <= Math.min(nx - 2, Math.ceil(cx + r)); x++) {
+          const i = x + y * nx;
+          if (solid[i]) continue;
+          const dx = x - cx;
+          const dy = y - (cy + oy);
+          const d = Math.hypot(dx, dy);
+          if (d > r || d < 1e-6) continue;
+          const k = sign * s * (1 - d / r);
+          u[i] += (-dy / d) * k;
+          v[i] += (dx / d) * k;
+        }
+      }
+    }
+  }
+
   computeCurl() {
     const { nx, ny, u, v, curl } = this;
     for (let y = 1; y < ny - 1; y++) {

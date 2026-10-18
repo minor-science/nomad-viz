@@ -17,6 +17,14 @@ export class Dye {
   readonly py: Float32Array;
   readonly lane: Uint8Array;
   readonly intact: Uint8Array;
+  /** The regime now holding each particle, how long it has held it, and the regime it came from (a ring), or 255. */
+  readonly cur: Uint8Array;
+  readonly stay: Uint16Array;
+  readonly ring: Uint8Array;
+  /** Crossings since the last read: moves[from][to], in the order layers, cells, eddies. */
+  moves = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  /** Steps a regime must hold a particle before a move out of it counts as a crossing. */
+  settle = 40;
   private age: Uint16Array;
   count = 0;
   readonly sources: number[];
@@ -37,6 +45,9 @@ export class Dye {
     this.py = new Float32Array(cap);
     this.lane = new Uint8Array(cap);
     this.intact = new Uint8Array(cap);
+    this.cur = new Uint8Array(cap);
+    this.stay = new Uint16Array(cap);
+    this.ring = new Uint8Array(cap).fill(255);
     this.age = new Uint16Array(cap);
     // Sources sit inside the slow layers along the walls, where the liquid barely moves.
     this.sources = Array.from({ length: lanes }, (_, k) => 7 + ((k + 0.5) / lanes) * (ny - 14));
@@ -57,6 +68,9 @@ export class Dye {
     this.py[i] = this.py[j];
     this.lane[i] = this.lane[j];
     this.intact[i] = this.intact[j];
+    this.cur[i] = this.cur[j];
+    this.stay[i] = this.stay[j];
+    this.ring[i] = this.ring[j];
     this.age[i] = this.age[j];
   }
 
@@ -73,6 +87,9 @@ export class Dye {
         this.lane[i] = k;
         this.intact[i] = 1;
         this.age[i] = 0;
+        this.cur[i] = 0;
+        this.stay[i] = 0;
+        this.ring[i] = 255;
       }
     }
     for (let i = this.count - 1; i >= 0; i--) {
@@ -83,6 +100,29 @@ export class Dye {
       if (Math.abs(this.y[i] - this.sources[this.lane[i]]) > this.laneWidth) this.intact[i] = 0;
       if (this.x[i] > this.nx - 2 || this.x[i] < 1 || this.age[i] > this.maxAge) this.remove(i);
     }
+  }
+
+  /** Follow each particle's regime; a particle that settles into a new one keeps a ring in the old one's color. */
+  track(r: Regimes) {
+    for (let i = 0; i < this.count; i++) {
+      const now = this.intact[i] ? 0 : r.kind[Math.floor(this.x[i]) + Math.floor(this.y[i]) * this.nx];
+      if (now === this.cur[i]) {
+        if (this.stay[i] < 60000) this.stay[i]++;
+        // A move counts once the new regime has held the particle for a while, so flicker does not.
+        if (this.stay[i] === this.settle && this.ring[i] !== 255 && this.ring[i] !== now) this.moves[this.ring[i]][now]++;
+        continue;
+      }
+      if (this.stay[i] >= this.settle) this.ring[i] = this.cur[i];
+      this.cur[i] = now;
+      this.stay[i] = 0;
+    }
+  }
+
+  /** Read and reset the crossings counted since the last call. */
+  takeMoves() {
+    const m = this.moves;
+    this.moves = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    return m;
   }
 
   /**

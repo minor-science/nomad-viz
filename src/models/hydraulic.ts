@@ -102,6 +102,55 @@ const MIXTURE: Caption = {
   sub: 'Smooth and striated “exist only in mixture” (Plateaus: 474).',
   color: '#cbd5e1',
 };
+// One-way acts and lines of flight, reported when a crossing runs well above its usual level.
+// CROSSING[from][to], in the order layers, cells, eddies.
+const CROSSING: (Caption | null)[][] = [
+  [
+    null,
+    {
+      head: 'WARDING OFF · Labor slips out of the conduit back into the households’ circles, out of the corvée’s reach (laminar flow breaks into convection cells).',
+      sub: 'War “maintains the dispersal and segmentarity of groups” (Plateaus: 357).',
+      color: YELLOW,
+    },
+    {
+      head: 'LINE OF FLIGHT · CAPTURE TURNS WAR MACHINE · Drafted labor breaks out of the conduit and takes to the open field as journeymen (laminar flow breaks into turbulence).',
+      sub: 'The State “undertook to conquer both a band vagabondage and a body nomadism” (Plateaus: 368).',
+      color: MAGENTA,
+    },
+  ],
+  [
+    {
+      head: 'CAPTURE · OVERCODING · Households near the conduit are swept into its lanes, their labor drafted onto the works (convection cells give way to laminar flow).',
+      sub: 'Capture works “wherever capture contributes to the creation of that which it captures” (Plateaus: 448).',
+      color: CYAN,
+    },
+    null,
+    {
+      head: 'LINE OF FLIGHT · WARDING OFF GIVES BIRTH TO A WAR MACHINE · Households throw off journeymen, who leave together for the open field (convection cells burst into turbulence).',
+      sub: 'In the band, a member who leaves “will not leave alone but will take along his allies” (Plateaus: 358).',
+      color: MAGENTA,
+    },
+  ],
+  [
+    {
+      head: 'CAPTURE · APPROPRIATION · Eddies drifting into the conduit are straightened into its lanes: journeymen settled into guilds and assigned channels (turbulence dies out in laminar flow).',
+      sub: '“Settling, sedentarizing labor power, regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368).',
+      color: CYAN,
+    },
+    {
+      head: 'WARDING OFF · Journeymen settle into households, each circle keeping its own labor (turbulence calms into convection cells).',
+      sub: '“the circles are not concentric, and the two segments require a third segment through which to communicate” (Plateaus: 433).',
+      color: YELLOW,
+    },
+    null,
+  ],
+];
+const RAID: Caption = {
+  head: 'WAR MACHINE · THE RAID · Journeymen sweep down the conduit with their own upswell: its lanes break into eddies where they pass and close again behind them once they move on (a traveling hot spot).',
+  sub: 'The war machine “does not necessarily have war as its object (for example, the raid can be seen as another object, rather than as a particular form of war)” (Plateaus: 417).',
+  color: MAGENTA,
+};
+
 const MODE_CAPTION: Partial<Record<Mode, Caption>> = {
   state: {
     head: 'CAPTURE ALONE · A strong, steady draft and little upswell: all labor runs in the State’s channels, from the villages to its works (laminar flow).',
@@ -150,7 +199,17 @@ function create(): SimInstance {
   // What replaced a lost circle or pack, fixed when the loss is first reported.
   let segmentFate: string | null = null;
   let packFate: string | null = null;
+  // Raids: hot spots that travel down the channel. Crossings: counts over the last WINDOW frames,
+  // against each crossing's usual level.
+  let raids: { x: number }[] = [];
+  let raidDue = 0;
+  let raidStarted = false;
+  const raidWobble = new Wobble();
+  const WINDOW = 60;
+  const recent: number[][][] = [];
+  const usual = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
   const tags = {
+    raid: new StickyTag<{ x: number }>(2000),
     conduit: new StickyTag<number>(400),
     segment: new StickyTag<{ x: number; y: number }>(300),
     pack: new StickyTag<{ x: number; y: number }>(300),
@@ -165,6 +224,10 @@ function create(): SimInstance {
       regimes.rel = 0.06;
       heaters = new HeatPatches(NX, HEATERS);
       dye = new Dye(DYE_CAP, NX, NY, LANES);
+      raids = [];
+      raidDue = 0;
+      recent.length = 0;
+      for (const row of usual) row.fill(0);
       motes = Array.from({ length: 1600 }, () => {
         const x = 1 + Math.random() * (NX - 3);
         const y = 1 + Math.random() * (NY - 3);
@@ -206,12 +269,32 @@ function create(): SimInstance {
       dye.mark();
       for (let k = 0; k < steps; k++) {
         floor = even ? floor.fill(1) : heaters.step(surge, pace, wander);
+        // Raids arrive in uneven surges (more often in war-machine mode) and travel downstream.
+        if (!even && mode !== 'state') {
+          raidDue += params.raids * (mode === 'nomad' ? 3 : raidWobble.step(1, 0.002));
+          if (raidDue >= 1) {
+            raidDue -= 1;
+            raids.push({ x: 0 });
+            raidStarted = true;
+          }
+        }
+        for (const r of raids) {
+          for (let x = 0; x < NX; x++) floor[x] += 10 * Math.exp(-((x - r.x) ** 2) / 36);
+          r.x += 0.3;
+        }
+        raids = raids.filter((r) => r.x < NX + 10);
         const along = mode === 'conflict' ? flow * wobble.step(0.6, 0.0015) : flow;
         fluid.stepThermal(floor, KAPPA, heat, 0.5);
         fluid.step({ nu: NU, uTop: along, uBottom: along, clinamen: 0.01, confinement: 0 });
         regimes.update(fluid);
         dye.step(fluid, params.dye);
+        dye.track(regimes);
       }
+      // Crossings this frame, kept for a window and compared with their usual level.
+      const moves = dye.takeMoves();
+      recent.push(moves);
+      if (recent.length > WINDOW) recent.shift();
+      for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) usual[a][b] += (moves[a][b] - usual[a][b]) * 0.003;
       const stakes = dye.stats(regimes);
       // The front as drawn follows the measured front smoothly, since the measured one jumps
       // whenever the leading particle of a lane strays from it.
@@ -295,6 +378,19 @@ function create(): SimInstance {
       main.setTransform(1, 0, 0, 1, 0, 0);
       main.drawImage(trail, 0, 0);
       main.restore();
+      // Dye that has just crossed from one regime to another keeps a ring in the color it came from.
+      const REGIME_COLOR = [CYAN, YELLOW, MAGENTA];
+      ctx.lineWidth = 2;
+      for (let i = 0; i < dye.count; i++) {
+        const from = dye.ring[i];
+        if (from === 255 || dye.stay[i] > 240 || dye.stay[i] < dye.settle) continue;
+        ctx.fillStyle = REGIME_COLOR[dye.cur[i]];
+        ctx.strokeStyle = REGIME_COLOR[from];
+        ctx.beginPath();
+        ctx.arc(dye.x[i] * sx, dye.y[i] * sy, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
 
       // The sources, and the conduit's front in each lane: how far the flow gets intact.
       ctx.fillStyle = INK;
@@ -336,7 +432,28 @@ function create(): SimInstance {
           // A caption whose process has nearly vanished may change sooner, so it never contradicts the field.
           const shown = caption === MIXTURE ? -1 : HOLDING.includes(caption) ? HOLDING.indexOf(caption) : GAINS.findIndex((row) => row.includes(caption));
           const stale = shown >= 0 && [stakes.reach, stakes.held, stakes.scattered][shown] < 0.25;
-          if ((captionAge > PHASE_HOLD || (stale && captionAge > 60)) && n > TREND) {
+          // Events first: a raid as it begins, then any crossing running well above its usual level.
+          let event: Caption | null = null;
+          if (raidStarted) event = RAID;
+          else if (recent.length === WINDOW) {
+            let best = 1.6;
+            for (let a = 0; a < 3; a++) {
+              for (let b = 0; b < 3; b++) {
+                if (a === b || !CROSSING[a][b]) continue;
+                const sum = recent.reduce((acc, m) => acc + m[a][b], 0);
+                const ratio = sum / Math.max(1, usual[a][b] * WINDOW);
+                if (sum >= 40 && ratio > best) {
+                  best = ratio;
+                  event = CROSSING[a][b];
+                }
+              }
+            }
+          }
+          raidStarted = false;
+          if (event && event !== caption && captionAge > 90) {
+            caption = event;
+            captionAge = 0;
+          } else if ((captionAge > PHASE_HOLD || (stale && captionAge > 60)) && n > TREND) {
             const series = [history.reach, history.held, history.scattered];
             const delta = series.map((s) => s[n - 1] - s[n - 1 - TREND]);
             const gainer = delta.indexOf(Math.max(...delta));
@@ -375,6 +492,12 @@ function create(): SimInstance {
       // Explain layer: the conduit's front, a segment, and a pack, each followed as it moves.
       if (f.explain) {
         beginTags(f.keepClear);
+        // A raid, followed as it travels down the channel.
+        tags.raid.update(
+          (r) => (raids.includes(r) ? { x: r.x * sx, y: NY * 0.3 * sy } : null),
+          () => (raids.length ? { anchor: raids[raids.length - 1], x: raids[raids.length - 1].x * sx, y: NY * 0.3 * sy } : null),
+        );
+        tags.raid.draw(ctx, 'WAR MACHINE · a raid: journeymen sweeping down the conduit, breaking its lanes as they pass', MAGENTA, { width, height }, 'WAR MACHINE · the raid has moved on, and the corvée closes its lanes behind it');
         const bounds = { width, height };
         // Share of a kind in the neighborhood around a point, so a tag reads a region, not one cell.
         const share = (a: { x: number; y: number }, kind: number) => {
@@ -487,6 +610,7 @@ export const hydraulic: ModelDef = {
     { kind: 'slider', key: 'surge', label: 'Surges (unevenness)', min: 0, max: 2, step: 0.1, default: 1.2, tint: 'magenta', format: 'dec2' },
     { kind: 'slider', key: 'pace', label: 'Surge Pace', min: 0.0005, max: 0.006, step: 0.0005, default: 0.002, tint: 'magenta', format: 'x1000' },
     { kind: 'slider', key: 'wander', label: 'Heaters Wander', min: 0, max: 3, step: 0.25, default: 1, tint: 'magenta', format: 'dec2' },
+    { kind: 'slider', key: 'raids', label: 'Raids on the Conduit', min: 0, max: 0.004, step: 0.0002, default: 0.0008, tint: 'magenta', format: 'x1000' },
     { kind: 'slider', key: 'dye', label: 'Dye per Source', min: 0.1, max: 1, step: 0.05, default: 0.4, tint: 'ink', format: 'dec2' },
     { kind: 'slider', key: 'speed', label: 'Steps per Snapshot', min: 0.5, max: 4, step: 0.5, default: 2, tint: 'ink', format: 'dec2', divider: true },
   ],
@@ -500,6 +624,8 @@ export const hydraulic: ModelDef = {
     { process: 'wardingOff', heading: '03 / Warding off', text: 'Segments: households keep their work in small circles of their own ahead of the conduit’s front, where the draft cannot get through (convection cells). War “maintains the dispersal and segmentarity of groups” (Plateaus: 357), and “the circles are not concentric” (433).' },
   ],
   legend: [
+    { swatch: MAGENTA, see: 'A bright patch of heat moving down the channel', social: 'a raid: journeymen sweeping down the conduit, breaking its lanes where they pass and moving on', physics: 'a hot spot traveling with the flow, stirring turbulence where it passes', atp: '“the raid can be seen as another object, rather than as a particular form of war” (Plateaus: 417)' },
+    { swatch: INK, see: 'Dots ringed in another color', social: 'labor that has just crossed over: journeymen settled into guilds, households drafted, drafted labor or households breaking out as journeymen', physics: 'dye that has settled into a new regime, ringed in the color of the regime it left', atp: 'the State “undertook to conquer both a band vagabondage and a body nomadism” (Plateaus: 368)' },
     { swatch: CYAN, see: 'Cyan dye and cyan ticks', social: 'labor drafted along the State’s channels, from the villages to its works, by corvée and by guild, the ticks marking how far the draft reaches', physics: 'laminar flow, each source’s dye staying in its lane (Reynolds 1883)', atp: 'the State “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368)', example: 'the corvée gangs on an empire’s canals (cf. Wittfogel, 363)' },
     { swatch: YELLOW, see: 'Yellow dye', social: 'households that work for themselves and share what they make, leaving no surplus to levy', physics: 'dye held in steady convection cells (Rayleigh-Bénard)', atp: 'war “maintains the dispersal and segmentarity of groups” (Plateaus: 357)', example: 'the band in Plateaus whose members “disperse to eat or sleep separately,” so no leader gains stable power (358)' },
     { swatch: MAGENTA, see: 'Magenta dye', social: 'journeymen moving from site to site, outside the corvée and the guilds', physics: 'dye scattered by turbulence', atp: '“From turba to turbo” (Plateaus: 361)', example: 'the compagnonnages of masons, carpenters, and smiths, “the nomadic or itinerant bodies” States have always had trouble with (368)' },
