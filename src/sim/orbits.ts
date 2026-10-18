@@ -88,6 +88,8 @@ export class Orbits {
   societyLimit = 14;
   /** Strength of the capital city's halo in the crowd that slows societies. */
   halo = 1;
+  /** Distance from the center within which a bound body counts as held by the capital city. */
+  holdRadius = 35;
   private pool = 0;
   private rand: () => number;
 
@@ -473,7 +475,8 @@ export class Orbits {
       if (this.isState[i]) k = PETTY;
       else if (this.isCompany[i]) k = energy < 0 ? ARMY : COMPANY;
       else if (this.soc[i] >= 0 && this.socCount[this.soc[i]] >= 4) k = SOCIETY;
-      else if (energy < 0) k = HELD;
+      // Held: bound to the capital city and within its reach; a slow body far out is free.
+      else if (energy < 0 && r < this.holdRadius) k = HELD;
       kind[i] = k;
       counts[k] += this.isCompany[i] ? 0 : 1;
     }

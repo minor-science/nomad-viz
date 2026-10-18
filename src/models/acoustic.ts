@@ -371,7 +371,7 @@ function create(): SimInstance {
       // count, magenta while their beat runs out as waves.
       ctx.lineWidth = 2;
       for (let i = 0; i < field.n; i++) {
-        if (ring[i] === 255 || stay[i] > 120 || stay[i] < SETTLE) continue;
+        if (ring[i] === 255 || stay[i] > SETTLE + 40 || stay[i] < SETTLE) continue;
         ctx.strokeStyle = KIND_COLOR[ring[i]];
         ctx.beginPath();
         ctx.arc(((i % W) + 0.5) * sx + sway, (((i / W) | 0) + 0.75) * sy, 4, 0, Math.PI * 2);
@@ -565,11 +565,11 @@ export const acoustic: ModelDef = {
   describe: (mode) =>
     `Acoustic simulation in ${mode} mode: a field of metronomes on one board that can sway. Cyan metronomes keep the board’s common beat, and the field sways with it (one bell for all, capture). Yellow ones keep their own village’s tempo (villages keeping their own hours, warding off). Magenta ones catch the beat from their neighbors in traveling waves (contagion, the war machine).`,
   controls: [
-    { kind: 'slider', key: 'board', label: 'Board’s Pull (capture)', min: 0.02, max: 0.4, step: 0.01, default: 0.15, tint: 'cyan', format: 'dec2' },
+    { kind: 'slider', key: 'board', label: 'Board’s Pull (capture)', min: 0.02, max: 0.4, step: 0.01, default: 0.13, tint: 'cyan', format: 'dec2' },
     { kind: 'slider', key: 'spread', label: 'Villages’ Tempo Spread at Rest', min: 0, max: 1.2, step: 0.05, default: 0.3, tint: 'yellow', format: 'dec2' },
     { kind: 'slider', key: 'alarm', label: 'Villages’ Alarm (board swing)', min: 0.4, max: 0.95, step: 0.05, default: 0.8, tint: 'yellow', format: 'dec2' },
-    { kind: 'slider', key: 'neighbor', label: 'Neighbors’ Pull (war machine)', min: 0, max: 1.5, step: 0.05, default: 0.8, tint: 'magenta', format: 'dec2' },
-    { kind: 'slider', key: 'raids', label: 'Raids on the Counted Field', min: 0, max: 0.01, step: 0.0005, default: 0.002, tint: 'magenta', format: 'x1000' },
+    { kind: 'slider', key: 'neighbor', label: 'Neighbors’ Pull (war machine)', min: 0, max: 3, step: 0.1, default: 1.6, tint: 'magenta', format: 'dec2' },
+    { kind: 'slider', key: 'raids', label: 'Raids on the Counted Field', min: 0, max: 0.01, step: 0.0005, default: 0.004, tint: 'magenta', format: 'x1000' },
     { kind: 'slider', key: 'surge', label: 'Surges (unevenness)', min: 0, max: 2, step: 0.1, default: 1, tint: 'magenta', format: 'dec2' },
     { kind: 'slider', key: 'pace', label: 'Surge Pace', min: 0.0005, max: 0.006, step: 0.0005, default: 0.002, tint: 'magenta', format: 'x1000' },
     { kind: 'slider', key: 'speed', label: 'Steps per Snapshot', min: 0.5, max: 4, step: 0.5, default: 1, tint: 'ink', format: 'dec2', divider: true },

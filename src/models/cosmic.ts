@@ -136,6 +136,8 @@ function create(): SimInstance {
   let py = new Float32Array(0);
   let last = { societies: 0, absorbed: 0, caught: 0, held: 0, frame: 0, raids: 0, hardened: 0, born: 0, annexed: 0 };
   let heldTrend: number[] = [];
+  const absorbedRecent: number[] = [];
+  let alarmed = 0;
   const history = { held: [] as number[], societies: [] as number[], companies: [] as number[], army: [] as number[] };
   let societyFate: string | null = null;
   const tags = {
@@ -171,16 +173,20 @@ function create(): SimInstance {
       let p: OrbitParams;
       let rate = params.rate;
       if (mode === 'state') {
-        p = { capital, friction: 0.05, sink: Math.max(params.sink, 20) * 1.5, cool: 0, alarm: 9 };
+        p = { capital, friction: 0.05, sink: Math.max(params.sink, 20) * 3, cool: 0, alarm: 9 };
         rate = 0;
       } else if (mode === 'nonstate') {
-        p = { capital, friction: 0.05, sink: params.sink, cool: Math.max(params.cool, 0.6) * 1.5, alarm: Math.min(params.alarm, 0.4) };
+        p = { capital, friction: 0.05, sink: params.sink * 0.25, cool: params.cool, alarm: Math.min(params.alarm, 0.15) };
         rate = 0;
       } else if (mode === 'nomad') {
         p = { capital, friction: 0.01, sink: params.sink * 0.3, cool: params.cool, alarm: params.alarm };
         rate = params.rate * 3;
       } else p = { capital, friction: 0.05, sink: params.sink, cool: params.cool, alarm: params.alarm };
 
+      // Isolated modes show one process alone, so lines of flight out of warding off (hardening,
+      // breakaway) run only where the processes meet.
+      orbits.collapse = mode === 'nonstate' ? 0 : 0.2;
+      orbits.breakaway = mode === 'nonstate' ? 1e9 : 7;
       if (px.length !== orbits.cap) {
         px = new Float32Array(orbits.cap);
         py = new Float32Array(orbits.cap);
@@ -205,9 +211,12 @@ function create(): SimInstance {
       const co = orbits.companies();
       const societies = orbits.societies();
       history.held.push(shares.held);
-      history.societies.push(societies / 14);
-      history.companies.push(Math.min(1, (co.total - co.caught) / 4));
-      history.army.push(Math.min(1, orbits.absorbed / 30));
+      history.societies.push(shares.society);
+      history.companies.push(Math.min(1, (co.total - co.caught) / 20));
+      // Absorptions as a recent rate, not a running total.
+      absorbedRecent.push(orbits.absorbed);
+      if (absorbedRecent.length > 300) absorbedRecent.shift();
+      history.army.push(Math.min(1, (absorbedRecent[absorbedRecent.length - 1] - absorbedRecent[0]) / 25));
       if (history.held.length > SPAN) for (const k of Object.keys(history) as (keyof typeof history)[]) history[k].shift();
       heldTrend.push(shares.held);
       if (heldTrend.length > 90) heldTrend.shift();
@@ -279,7 +288,9 @@ function create(): SimInstance {
         }
       }
 
-      // Narration: events first, then what holds.
+      // Narration: events first, then what holds. Anticipation is reported when a society's alarm
+      // newly rises, not whenever some society is alarmed.
+      const nowAlarmed = orbits.socAlarm.filter((a, s) => a && orbits!.socCount[s] >= 4).length;
       last.frame++;
       let event: Event | null = null;
       if (orbits.hardened > last.hardened) event = 'hardened';
@@ -291,7 +302,8 @@ function create(): SimInstance {
       else if (co.caught > last.caught) event = 'caught';
       else if (heldTrend.length === 90 && heldTrend[0] - shares.held > 0.08 && co.total - co.caught > 0) event = 'scatter';
       else if (societies > last.societies) event = 'formed';
-      else if (orbits.socAlarm.some((a, s) => a && orbits!.socCount[s] >= 4) && p.cool > 0) event = 'tighten';
+      else if (p.cool > 0 && nowAlarmed > alarmed) event = 'tighten';
+      alarmed = nowAlarmed;
       last.societies = societies;
       last.raids = orbits.raids;
       last.hardened = orbits.hardened;
@@ -322,9 +334,9 @@ function create(): SimInstance {
             ...cap,
             series: [
               { values: history.held, color: CYAN, label: 'held by the capital city' },
-              { values: history.societies, color: YELLOW, label: 'societies on their own' },
-              { values: history.companies, color: MAGENTA, label: 'companies free' },
-              { values: history.army, color: '#cbd5e1', label: 'companies absorbed' },
+              { values: history.societies, color: YELLOW, label: 'living in societies' },
+              { values: history.companies, color: MAGENTA, label: 'companies riding' },
+              { values: history.army, color: '#cbd5e1', label: 'companies absorbed lately' },
             ],
             span: SPAN,
           }
