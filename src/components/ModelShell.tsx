@@ -50,7 +50,8 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   const [isPlaying, setIsPlaying] = useState(!isReducedMotion);
   const [showControls, setShowControls] = useState(false);
   const [explain, setExplain] = useState(true);
-  const [showLegend, setShowLegend] = useState(true);
+  // The legend starts open on wide screens and closed on phones, where it would cover the canvas.
+  const [showLegend, setShowLegend] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [narration, setNarration] = useState<Narration | null>(null);
   const [showTheory, setShowTheory] = useState(() => readPanel() === 'sources');
   const [theoryLoaded, setTheoryLoaded] = useState(() => readPanel() === 'sources');
@@ -238,9 +239,9 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   const head = narration ? splitHead(narration.head) : null;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden min-w-0">
       <div className="shrink-0 flex flex-wrap items-center gap-x-5 gap-y-1 px-4 py-2 border-b border-white/10">
-        <div className="flex gap-4" role="group" aria-label="Mode">
+        <div className="flex flex-wrap gap-x-4" role="group" aria-label="Mode">
           {MODE_BUTTONS.filter((b) => modes.includes(b.mode)).map((b) => (
             <button
               key={b.mode}
@@ -253,7 +254,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
             </button>
           ))}
         </div>
-        <div className="flex gap-4 ml-auto">
+        <div className="flex flex-wrap gap-x-4 sm:ml-auto">
           <button
             onClick={() => {
               const next = !isPlaying;

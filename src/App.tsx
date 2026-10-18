@@ -32,9 +32,9 @@ export default function App() {
         {announcement}
       </div>
 
-      <header className="shrink-0 flex items-center gap-6 px-4 h-12 border-b border-white/10">
-        <h1 className="text-sm font-semibold tracking-tight whitespace-nowrap">Nomadology Visualizer</h1>
-        <nav className="flex gap-4 overflow-x-auto text-sm" aria-label="Models">
+      <header className="shrink-0 flex items-center gap-4 sm:gap-6 px-4 h-12 border-b border-white/10 min-w-0">
+        <h1 className="hidden sm:block text-sm font-semibold tracking-tight whitespace-nowrap">Nomadology Visualizer</h1>
+        <nav className="flex gap-4 overflow-x-auto min-w-0 text-sm" aria-label="Models">
           {models.map((m) => (
             <button
               key={m.id}
@@ -56,7 +56,7 @@ export default function App() {
         </button>
       </header>
 
-      <main className="flex-1 min-h-0" aria-label={`${MODEL[activeModel].name} model`}>
+      <main className="flex-1 min-h-0 min-w-0" aria-label={`${MODEL[activeModel].name} model`}>
         <ModelShell
           key={activeModel}
           model={MODEL[activeModel]}
