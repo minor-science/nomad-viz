@@ -1,4 +1,3 @@
-import { Waves } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
 import { Metronomes, CAUGHT, SEGMENT, WAVE, type OscParams } from '../sim/oscillators';
 import { Drive, type DriveSettings } from '../sim/metronomeDrive';
@@ -556,8 +555,6 @@ export const acoustic: ModelDef = {
   id: 'acoustic',
   name: 'Acoustic',
   tagline: 'Resonance',
-  sidebarIcon: Waves,
-  headerIcon: Waves,
   title: 'Acoustic Metaphysics',
   subtitle: 'A World of Beats // Bell, Villages, Contagion',
   frameEvery: 2,

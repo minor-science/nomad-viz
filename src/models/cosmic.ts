@@ -1,4 +1,3 @@
-import { Magnet, Orbit } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
 import { Orbits, HELD, SOCIETY, COMPANY, ARMY, PETTY, type OrbitParams } from '../sim/orbits';
 import { Wobble } from '../sim/heating';
@@ -432,8 +431,6 @@ export const cosmic: ModelDef = {
   id: 'cosmic',
   name: 'Cosmic',
   tagline: 'Gravity',
-  sidebarIcon: Orbit,
-  headerIcon: Magnet,
   title: 'Cosmic Metaphysics',
   subtitle: 'A World of Weight and Speed // Capital City, Societies, Companies',
   frameEvery: 2,

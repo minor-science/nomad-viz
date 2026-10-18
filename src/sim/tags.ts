@@ -56,8 +56,11 @@ export function drawTag(
   shown.add(text);
   const kind = text.split(' · ')[0];
   if (kind in PROCESS_COLOR) color = PROCESS_COLOR[kind];
+  // The label before " · " sets the color; only the words after it are drawn, since the color
+  // already says which process a tag belongs to.
+  if (text.includes(' · ')) text = text.slice(text.indexOf(' · ') + 3);
   ctx.save();
-  ctx.font = 'bold 20px "JetBrains Mono", monospace';
+  ctx.font = '22px Inter, ui-sans-serif, system-ui, sans-serif';
   const w = ctx.measureText(text).width + 16;
   const h = 30;
   // Candidate spots: right or left of the feature (side 0, 1), above or below it (vert 0, 1),
@@ -105,8 +108,9 @@ export function drawTag(
   ctx.beginPath();
   ctx.arc(x, y, 5, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(5, 5, 5, 0.85)';
+  ctx.fillStyle = 'rgba(5, 8, 16, 0.8)';
   ctx.fillRect(lx, ly, w, h);
+  ctx.lineWidth = 1.5;
   ctx.strokeRect(lx, ly, w, h);
   ctx.fillStyle = color;
   ctx.fillText(text, lx + 8, ly + 21);

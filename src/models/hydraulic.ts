@@ -1,4 +1,3 @@
-import { Droplets } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
 import { Fluid } from '../sim/fluid';
 import { Regimes, LAYERS, CELLS, EDDIES } from '../sim/regimes';
@@ -596,8 +595,6 @@ export const hydraulic: ModelDef = {
   id: 'hydraulic',
   name: 'Hydraulic',
   tagline: 'Liquid',
-  sidebarIcon: Droplets,
-  headerIcon: Droplets,
   title: 'Hydraulic Metaphysics',
   subtitle: 'A Liquid World // Conduit, Segments, Packs',
   frameEvery: 2,

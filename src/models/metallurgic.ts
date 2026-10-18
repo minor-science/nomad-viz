@@ -1,4 +1,3 @@
-import { Anvil, Zap } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
 import { LatticeGas, criticalSize, type LatticeParams } from '../sim/latticeGas';
 import { Smiths } from '../sim/smiths';
@@ -514,8 +513,6 @@ export const metallurgic: ModelDef = {
   id: 'metallurgic',
   name: 'Metallurgic',
   tagline: 'Crystallization',
-  sidebarIcon: Anvil,
-  headerIcon: Zap,
   title: 'Metallurgic Metaphysics',
   subtitle: 'Nucleation // Matter-Flow',
   stillFrames: 450,

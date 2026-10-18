@@ -1,4 +1,3 @@
-import type { LucideIcon } from 'lucide-react';
 import type { ProcessId } from '../processes';
 
 export type ModelId = 'hydraulic' | 'metallurgic' | 'acoustic' | 'cosmic';
@@ -95,8 +94,6 @@ export interface ModelDef {
   id: ModelId;
   name: string;
   tagline: string;
-  sidebarIcon: LucideIcon;
-  headerIcon: LucideIcon;
   title: string;
   subtitle: string;
   badge?: string;
