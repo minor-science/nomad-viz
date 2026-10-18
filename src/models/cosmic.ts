@@ -447,7 +447,7 @@ export const cosmic: ModelDef = {
     { kind: 'slider', key: 'raids', label: 'Share That Raid the Capital City', min: 0, max: 1, step: 0.05, default: 0.15, tint: 'magenta', format: 'pct' },
     { kind: 'slider', key: 'raidMass', label: 'Raider Mass', min: 20, max: 300, step: 10, default: 150, tint: 'magenta', format: 'int' },
     { kind: 'slider', key: 'surge', label: 'Surges (unevenness)', min: 0, max: 2.5, step: 0.1, default: 1, tint: 'magenta', format: 'dec2' },
-    { kind: 'slider', key: 'speed', label: 'Steps per Snapshot', min: 0.2, max: 4, step: 0.2, default: 0.8, tint: 'ink', format: 'dec2', divider: true },
+    { kind: 'slider', key: 'speed', label: 'Steps per Snapshot', min: 0.2, max: 4, step: 0.2, default: 1.6, tint: 'ink', format: 'dec2', divider: true },
   ],
   status: (p) => [
     ['Capital city', String(p.capital)],
