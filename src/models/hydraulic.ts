@@ -180,6 +180,7 @@ interface Mote {
 const FIELD_COLOR = ['rgba(0, 174, 239, 0.4)', 'rgba(224, 168, 0, 0.45)', 'rgba(236, 0, 140, 0.42)'];
 
 function create(): SimInstance {
+  let turned = false;
   let fluid: Fluid | null = null;
   let regimes: Regimes | null = null;
   let heaters: HeatPatches | null = null;
@@ -216,7 +217,9 @@ function create(): SimInstance {
   };
 
   return {
-    init() {
+    init(width, height) {
+      // On a tall screen the channel is turned, so the flow runs from top to bottom.
+      turned = height > width;
       fluid = new Fluid(NX, NY);
       for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) fluid.temp[x + y * NX] = y / (NY - 1);
       regimes = new Regimes(fluid.n);
@@ -312,8 +315,17 @@ function create(): SimInstance {
       if (history.reach.length > SPAN) for (const k of Object.keys(history) as (keyof typeof history)[]) history[k].shift();
 
       // The liquid fills the canvas. Dye streaks fade on their own layer.
-      const sx = width / NX;
-      const sy = height / NY;
+      // The channel's own frame: along the flow (W_) and across it (H_). When turned, the drawing
+      // is rotated a quarter turn, so the flow runs down the screen and the heated floor is on the left.
+      const W_ = turned ? height : width;
+      const H_ = turned ? width : height;
+      const base = ctx.getTransform();
+      if (turned) {
+        ctx.translate(width, 0);
+        ctx.rotate(Math.PI / 2);
+      }
+      const sx = W_ / NX;
+      const sy = H_ / NY;
       const main = ctx;
       if (!trail || trail.width !== main.canvas.width || trail.height !== main.canvas.height) {
         trail = document.createElement('canvas');
@@ -323,7 +335,7 @@ function create(): SimInstance {
       const tctx = trail.getContext('2d')!;
       tctx.setTransform(main.getTransform());
       tctx.fillStyle = 'rgba(11, 18, 32, 0.14)';
-      tctx.fillRect(0, 0, width, height);
+      tctx.fillRect(0, 0, W_, H_);
       tctx.lineWidth = 2;
       for (let kind = 0; kind < 3; kind++) {
         tctx.strokeStyle = FIELD_COLOR[kind];
@@ -367,7 +379,7 @@ function create(): SimInstance {
           const y0 = dye.py[i] * sy;
           const x1 = dye.x[i] * sx;
           const y1 = dye.y[i] * sy;
-          if (Math.abs(x1 - x0) > width / 4) continue;
+          if (Math.abs(x1 - x0) > W_ / 4) continue;
           tctx.moveTo(x0, y0);
           tctx.lineTo(x1 + (x1 - x0) * 0.5, y1 + (y1 - y0) * 0.5);
         }
@@ -415,12 +427,14 @@ function create(): SimInstance {
       const glowH = sy * 4;
       for (let x = 0; x < NX; x += 2) {
         const a = Math.min(0.5, 0.12 * floor[x] * (heat / params.heat));
-        const g = ctx.createLinearGradient(0, height - glowH, 0, height);
+        const g = ctx.createLinearGradient(0, H_ - glowH, 0, H_);
         g.addColorStop(0, 'rgba(255, 110, 70, 0)');
         g.addColorStop(1, `rgba(255, 110, 70, ${a})`);
         ctx.fillStyle = g;
-        ctx.fillRect(x * sx, height - glowH, sx * 2 + 0.5, glowH);
+        ctx.fillRect(x * sx, H_ - glowH, sx * 2 + 0.5, glowH);
       }
+
+      ctx.setTransform(base);
 
       // Narration. In conflict it names who is gaining on whom over the last few seconds.
       {
@@ -491,10 +505,12 @@ function create(): SimInstance {
       // Explain layer: the conduit's front, a segment, and a pack, each followed as it moves.
       if (f.explain) {
         beginTags(f.keepClear);
+        // A point in the channel's frame, on the screen.
+        const pt = (X: number, Y: number) => (turned ? { x: H_ - Y, y: X } : { x: X, y: Y });
         // A raid, followed as it travels down the channel.
         tags.raid.update(
-          (r) => (raids.includes(r) ? { x: r.x * sx, y: NY * 0.3 * sy } : null),
-          () => (raids.length ? { anchor: raids[raids.length - 1], x: raids[raids.length - 1].x * sx, y: NY * 0.3 * sy } : null),
+          (r) => (raids.includes(r) ? pt(r.x * sx, NY * 0.3 * sy) : null),
+          () => (raids.length ? { anchor: raids[raids.length - 1], ...pt(raids[raids.length - 1].x * sx, NY * 0.3 * sy) } : null),
         );
         tags.raid.draw(ctx, 'WAR MACHINE · a raid: journeymen sweeping down the conduit, breaking its lanes as they pass', MAGENTA, { width, height }, 'WAR MACHINE · the raid has moved on, and the corvée closes its lanes behind it');
         const bounds = { width, height };
@@ -517,26 +533,26 @@ function create(): SimInstance {
         const pick = (kind: number) => () => {
           for (let tries = 0; tries < 200; tries++) {
             const a = { x: 10 + Math.random() * (NX - 20), y: 3 + Math.random() * (NY * 0.55) };
-            if (share(a, kind) > 0.7) return { anchor: a, x: a.x * sx, y: a.y * sy };
+            if (share(a, kind) > 0.7) return { anchor: a, ...pt(a.x * sx, a.y * sy) };
           }
           return null;
         };
         if (mode === 'conflict' || mode === 'state') {
           // The conduit's front in the lane that reaches farthest.
           tags.conduit.update(
-            (k) => (fronts[k] > 12 ? { x: fronts[k] * sx, y: dye!.sources[k] * sy } : null),
+            (k) => (fronts[k] > 12 ? pt(fronts[k] * sx, dye!.sources[k] * sy) : null),
             () => {
               // The upper lanes only, clear of the legend at the bottom left.
               let best = 0;
               for (let k = 1; k < Math.ceil(fronts.length * 0.6); k++) if (fronts[k] > fronts[best]) best = k;
-              return fronts[best] > 12 ? { anchor: best, x: fronts[best] * sx, y: dye!.sources[best] * sy } : null;
+              return fronts[best] > 12 ? { anchor: best, ...pt(fronts[best] * sx, dye!.sources[best] * sy) } : null;
             },
           );
           tags.conduit.draw(ctx, 'CAPTURE · the corvée’s reach: villagers marched toward the State’s works', CYAN, bounds, 'CAPTURE · the corvée falls short: no labor reaches the works');
         }
         if (mode === 'conflict' || mode === 'nonstate') {
           // A segment barely drifts, so its tag stays put while the circle lasts.
-          tags.segment.update((a) => (share(a, CELLS) > 0.25 ? { x: a.x * sx, y: a.y * sy } : null), pick(CELLS));
+          tags.segment.update((a) => (share(a, CELLS) > 0.25 ? pt(a.x * sx, a.y * sy) : null), pick(CELLS));
           // When a circle is gone, what replaced it says what happened to the band.
           if (!tags.segment.lost) segmentFate = null;
           else if (!segmentFate && tags.segment.current) {
@@ -552,7 +568,7 @@ function create(): SimInstance {
             a.x += u * Math.max(1, steps) * 0.5;
             a.y += v * Math.max(1, steps) * 0.5;
             if (a.x < 3 || a.x > NX - 3 || a.y < 2 || a.y > NY - 2) return null;
-            return share(a, EDDIES) > 0.25 ? { x: a.x * sx, y: a.y * sy } : null;
+            return share(a, EDDIES) > 0.25 ? pt(a.x * sx, a.y * sy) : null;
           }, pick(EDDIES));
           if (!tags.pack.lost) packFate = null;
           else if (!packFate && tags.pack.current) {
@@ -562,7 +578,7 @@ function create(): SimInstance {
           }
           tags.pack.draw(ctx, 'WAR MACHINE · journeymen moving from site to site, outside the corvée and the guilds', MAGENTA, bounds, packFate ?? 'WAR MACHINE · these journeymen have stopped moving');
         }
-        drawTag(ctx, 4, dye.sources[0] * sy, 'the sources: the villages where the corvée recruits', INK, bounds);
+        { const sp = pt(4, dye.sources[0] * sy); drawTag(ctx, sp.x, sp.y, 'the sources: the villages where the corvée recruits', INK, bounds); }
         if (mode !== 'state' && !even) {
           // The upswell tag follows one heater while it surges, rather than jumping to whichever
           // spot on the floor is hottest this frame, and fades when that heater cools.
@@ -573,11 +589,11 @@ function create(): SimInstance {
             return c > NX * from && c < NX - 6 && floor[Math.round(c)] > floorMean * 1.4;
           };
           tags.upswell.update(
-            (k) => (hot(k, 0.55) ? { x: centers[k] * sx, y: height - sy } : null),
+            (k) => (hot(k, 0.55) ? pt(centers[k] * sx, H_ - sy) : null),
             () => {
               let best = -1;
               for (let k = 0; k < centers.length; k++) if (hot(k) && (best < 0 || floor[Math.round(centers[k])] > floor[Math.round(centers[best])])) best = k;
-              return best < 0 ? null : { anchor: best, x: centers[best] * sx, y: height - sy };
+              return best < 0 ? null : { anchor: best, ...pt(centers[best] * sx, H_ - sy) };
             },
           );
           tags.upswell.draw(ctx, 'the upswell: labor moving on its own, in “a rhythm without measure”', WARM, bounds);
@@ -598,9 +614,11 @@ export const hydraulic: ModelDef = {
   title: 'Hydraulic Metaphysics',
   subtitle: 'A Liquid World // Conduit, Segments, Packs',
   frameEvery: 2,
-  // A long channel: it keeps within three times its natural shape, as on a desktop screen.
+  // A long channel: it keeps within four times its natural shape (desktop screens stretch it about
+  // three times), and on a tall screen it turns so the flow runs down the screen.
   aspect: 6,
-  maxStretch: 3,
+  maxStretch: 4,
+  turns: true,
   stillFrames: 700,
   describe: (mode) =>
     `Hydraulic simulation in ${mode} mode: dye released from sources at the left into a liquid with a through-flow, heated unevenly from below. The dye stands for labor: cyan dye runs intact in its lane toward the far edge (drafted to the State’s works, laminar flow), yellow dye is held in small circles (kept by the households, convection cells), magenta dye is scattered through the space (roaming in packs, turbulence).`,
@@ -629,8 +647,8 @@ export const hydraulic: ModelDef = {
     { swatch: CYAN, see: 'Cyan dye and cyan ticks', social: 'labor drafted along the State’s channels, from the villages to its works, by corvée and by guild, the ticks marking how far the draft reaches', physics: 'laminar flow, each source’s dye staying in its lane (Reynolds 1883)', atp: 'the State “regulating the movement of the flow of labor, assigning it channels and conduits” (Plateaus: 368)', example: 'the corvée gangs on an empire’s canals (cf. Wittfogel, 363)' },
     { swatch: YELLOW, see: 'Yellow dye', social: 'households that work for themselves and share what they make, leaving no surplus to levy', physics: 'dye held in steady convection cells (Rayleigh-Bénard)', atp: 'war “maintains the dispersal and segmentarity of groups” (Plateaus: 357)', example: 'the band in Plateaus whose members “disperse to eat or sleep separately,” so no leader gains stable power (358)' },
     { swatch: MAGENTA, see: 'Magenta dye', social: 'journeymen moving from site to site, outside the corvée and the guilds', physics: 'dye scattered by turbulence', atp: '“From turba to turbo” (Plateaus: 361)', example: 'the compagnonnages of masons, carpenters, and smiths, “the nomadic or itinerant bodies” States have always had trouble with (368)' },
-    { swatch: INK, see: 'White dots at the left', social: 'the villages where the corvée recruits', physics: 'dye injected at fixed heights', atp: 'movement “from one specified point to another” (Plateaus: 363)' },
-    { swatch: WARM, see: 'Glow along the bottom', social: 'the upswell: labor moving on its own account, uneven in place and time', physics: 'heaters under the floor that drift and surge on their own, while the through-flow wavers', atp: '“a rhythm without measure, which relates to the upswell of a flow” (Plateaus: 364)' },
+    { swatch: INK, see: 'White dots where the flow enters', social: 'the villages where the corvée recruits', physics: 'dye injected at fixed heights', atp: 'movement “from one specified point to another” (Plateaus: 363)' },
+    { swatch: WARM, see: 'Glow along the heated floor', social: 'the upswell: labor moving on its own account, uneven in place and time', physics: 'heaters under the floor that drift and surge on their own, while the through-flow wavers', atp: '“a rhythm without measure, which relates to the upswell of a flow” (Plateaus: 364)' },
   ],
   create,
 };

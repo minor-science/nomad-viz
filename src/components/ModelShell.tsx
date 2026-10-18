@@ -139,7 +139,8 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
       let vh = w.ch;
       if (model.aspect) {
         const stretch = model.maxStretch ?? 1.25;
-        const a = Math.max(model.aspect / stretch, Math.min(model.aspect * stretch, w.cw / w.ch));
+        const natural = model.turns && w.ch > w.cw ? 1 / model.aspect : model.aspect;
+        const a = Math.max(natural / stretch, Math.min(natural * stretch, w.cw / w.ch));
         if (w.cw / w.ch > a) vw = w.ch * a;
         else vh = w.cw / a;
       }

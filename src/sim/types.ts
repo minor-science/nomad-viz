@@ -108,6 +108,8 @@ export interface ModelDef {
    *  `maxStretch` of it, letterboxing the rest, so a tall phone screen does not distort it. */
   aspect?: number;
   maxStretch?: number;
+  /** On a tall screen the model turns its drawing a quarter turn, so its natural shape is inverted. */
+  turns?: boolean;
   controls: ControlSpec[];
   status: (p: Params) => [string, string][];
   cards: Card[];
