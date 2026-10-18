@@ -104,6 +104,10 @@ export interface ModelDef {
   frameEvery?: number;
   /** Frames computed for the reduced-motion still. Defaults to 150. */
   stillFrames?: number;
+  /** The model's natural shape (width over height). If set, the shell keeps the drawing within
+   *  `maxStretch` of it, letterboxing the rest, so a tall phone screen does not distort it. */
+  aspect?: number;
+  maxStretch?: number;
   controls: ControlSpec[];
   status: (p: Params) => [string, string][];
   cards: Card[];

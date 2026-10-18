@@ -15,8 +15,9 @@ import { beginTags, drawTag, StickyTag } from '../sim/tags';
 // pull their tempi apart when the board starts to swing, and the neighbors' coupling surges in
 // drifting patches, so the three take the lead in turn.
 
-const W = 60;
-const H = 36;
+// The field holds about this many metronomes; its shape follows the screen's, so the arms and
+// villages keep their proportions on a phone as on a desktop.
+const CELLS = 2160;
 const SEGMENTS = 12;
 // Frames of history in the narrator's chart.
 const SPAN = 600;
@@ -192,9 +193,11 @@ function create(): SimInstance {
   let raidDue = 0;
   let raidStarted = false;
   const raidWobble = new Wobble();
-  const cur = new Uint8Array(W * H);
-  const stay = new Uint16Array(W * H);
-  const ring = new Uint8Array(W * H).fill(255);
+  let W = 60;
+  let H = 36;
+  let cur = new Uint8Array(W * H);
+  let stay = new Uint16Array(W * H);
+  let ring = new Uint8Array(W * H).fill(255);
   const SETTLE = 20;
   const WINDOW = 60;
   const recent: number[][][] = [];
@@ -212,7 +215,13 @@ function create(): SimInstance {
   };
 
   return {
-    init() {
+    init(width, height) {
+      const aspect = Math.max(0.6, Math.min(2, width / Math.max(1, height)));
+      W = Math.round(Math.sqrt(CELLS * aspect));
+      H = Math.round(CELLS / W);
+      cur = new Uint8Array(W * H);
+      stay = new Uint16Array(W * H);
+      ring = new Uint8Array(W * H).fill(255);
       field = new Metronomes(W, H, SEGMENTS);
       drive = new Drive(W);
       raids = [];

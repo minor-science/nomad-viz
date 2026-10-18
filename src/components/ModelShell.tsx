@@ -74,7 +74,9 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   const legendRef = useRef<HTMLDivElement>(null);
   const sim = useRef(model.create()).current;
   const live = useRef({ mode, params, motionScale: isReducedMotion ? 0.2 : 1, explain: true });
-  const world = useRef({ width: 0, height: 0, time: 0, ready: false });
+  // The canvas in world units, the view the model draws into (letterboxed if the model has a
+  // natural shape), and the canvas shape the model was started at.
+  const world = useRef({ width: 0, height: 0, time: 0, ready: false, cw: 0, ch: 0, ox: 0, oy: 0, scale: 1, initAspect: 0 });
 
   live.current = { mode, params, motionScale: isReducedMotion ? 0.2 : 1, explain: explain && !immersive };
   const isPlayingRef = useRef(isPlaying);
@@ -85,6 +87,13 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
     const w = world.current;
     if (!ctx || !w.ready) return;
     w.time += 1 / 60;
+    // A letterboxed model gets dark bands outside its view, then draws inside the view.
+    if (model.aspect) {
+      ctx.setTransform(w.scale, 0, 0, w.scale, 0, 0);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w.cw, w.ch);
+    }
+    ctx.setTransform(w.scale, 0, 0, w.scale, w.ox * w.scale, w.oy * w.scale);
     // Tags keep clear of the legend, wherever it sits over the canvas.
     const keepClear: { x: number; y: number; w: number; h: number }[] = [];
     const lg = legendRef.current;
@@ -92,7 +101,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
     if (lg && wrap && lg.offsetParent) {
       const a = lg.getBoundingClientRect();
       const b = wrap.getBoundingClientRect();
-      keepClear.push({ x: (a.left - b.left) * WORLD_SCALE, y: (a.top - b.top) * WORLD_SCALE, w: a.width * WORLD_SCALE, h: a.height * WORLD_SCALE });
+      keepClear.push({ x: (a.left - b.left) * WORLD_SCALE - w.ox, y: (a.top - b.top) * WORLD_SCALE - w.oy, w: a.width * WORLD_SCALE, h: a.height * WORLD_SCALE });
     }
     sim.frame(ctx, { width: w.width, height: w.height, time: w.time, mode: live.current.mode, params: live.current.params, motionScale, explain: live.current.explain, keepClear });
   };
@@ -119,12 +128,31 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
       const dpr = window.devicePixelRatio || 1;
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
-      canvas.getContext('2d')?.setTransform(dpr / WORLD_SCALE, 0, 0, dpr / WORLD_SCALE, 0, 0);
       const w = world.current;
-      w.width = width * WORLD_SCALE;
-      w.height = height * WORLD_SCALE;
-      if (!w.ready) {
+      w.scale = dpr / WORLD_SCALE;
+      canvas.getContext('2d')?.setTransform(w.scale, 0, 0, w.scale, 0, 0);
+      w.cw = width * WORLD_SCALE;
+      w.ch = height * WORLD_SCALE;
+      // The view: the whole canvas, or for a model with a natural shape, the largest box within
+      // maxStretch of that shape, centered.
+      let vw = w.cw;
+      let vh = w.ch;
+      if (model.aspect) {
+        const stretch = model.maxStretch ?? 1.25;
+        const a = Math.max(model.aspect / stretch, Math.min(model.aspect * stretch, w.cw / w.ch));
+        if (w.cw / w.ch > a) vw = w.ch * a;
+        else vh = w.cw / a;
+      }
+      w.ox = (w.cw - vw) / 2;
+      w.oy = (w.ch - vh) / 2;
+      w.width = vw;
+      w.height = vh;
+      // Start the model, or restart it if the screen has changed shape a lot (a phone turned), since
+      // models size their worlds to the shape they start at.
+      const aspect = w.cw / w.ch;
+      if (!w.ready || Math.abs(Math.log(aspect / w.initAspect)) > Math.log(1.25)) {
         w.ready = true;
+        w.initAspect = aspect;
         sim.init(w.width, w.height, live.current.params);
       }
       if (!isPlayingRef.current) renderStill();
@@ -331,14 +359,16 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
         </div>
       </div>
 
-      {explain && narration && head && (
-        <div className="shrink-0 flex items-start gap-6 px-4 py-2.5 border-b border-white/10" aria-live="polite">
+      {/* The message box keeps one height whatever its text, so the canvas below never resizes. */}
+      {sim.narrate && !immersive && (
+        <div className={`shrink-0 flex items-start gap-6 px-4 py-2.5 border-b border-white/10 overflow-hidden ${isHighVis ? 'h-[168px] sm:h-[124px]' : 'h-[136px] sm:h-24'}`} aria-live="polite">
+          {narration && head && (<>
           <div className="flex-1 min-w-0">
-            <p className={`${isHighVis ? 'text-base' : 'text-sm'} leading-snug`}>
+            <p className={`${isHighVis ? 'text-base' : 'text-sm'} leading-snug line-clamp-4 sm:line-clamp-2`}>
               {head.label && <span style={{ color: narration.color }}>{head.label}. </span>}
               {head.text}
             </p>
-            <p className={`${text} leading-snug mt-1 text-white/55`}><Book text={narration.sub} /></p>
+            <p className={`${text} leading-snug mt-1 text-white/55 line-clamp-2`}><Book text={narration.sub} /></p>
           </div>
           {narration.series.length > 0 && (
             <div className="hidden sm:block w-[240px] shrink-0">
@@ -359,6 +389,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
               </div>
             </div>
           )}
+          </>)}
         </div>
       )}
 

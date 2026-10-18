@@ -15,8 +15,9 @@ import { beginTags, StickyTag } from '../sim/tags';
 // it may be caught in orbit as the capital's army (appropriation). The three are not rivals for
 // one prize: each has its own movement, its own purpose, and a one-way relation to the others.
 
-const W = 160;
-const H = 100;
+// The field holds about this many square units; its shape follows the screen's, so that orbits
+// stay round on a phone as on a desktop.
+const AREA = 16000;
 const SPAN = 600;
 const PHASE_HOLD = 180;
 
@@ -123,6 +124,8 @@ const MODE_CAPTION: Partial<Record<Mode, Caption>> = {
 };
 
 function create(): SimInstance {
+  let W = 160;
+  let H = 100;
   let orbits: Orbits | null = null;
   let trail: HTMLCanvasElement | null = null;
   let narration: Narration | null = null;
@@ -150,7 +153,10 @@ function create(): SimInstance {
   let companyBorn = false;
 
   return {
-    init(_w, _h, params) {
+    init(width, height, params) {
+      const a = Math.max(0.6, Math.min(2, width / Math.max(1, height)));
+      W = Math.round(Math.sqrt(AREA * a));
+      H = Math.round(AREA / W);
       orbits = new Orbits(W, H);
       orbits.companyMass = params.companyMass;
       orbits.spawnNear = 0.26;

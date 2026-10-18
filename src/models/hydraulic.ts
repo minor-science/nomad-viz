@@ -598,6 +598,9 @@ export const hydraulic: ModelDef = {
   title: 'Hydraulic Metaphysics',
   subtitle: 'A Liquid World // Conduit, Segments, Packs',
   frameEvery: 2,
+  // A long channel: it keeps within three times its natural shape, as on a desktop screen.
+  aspect: 6,
+  maxStretch: 3,
   stillFrames: 700,
   describe: (mode) =>
     `Hydraulic simulation in ${mode} mode: dye released from sources at the left into a liquid with a through-flow, heated unevenly from below. The dye stands for labor: cyan dye runs intact in its lane toward the far edge (drafted to the State’s works, laminar flow), yellow dye is held in small circles (kept by the households, convection cells), magenta dye is scattered through the space (roaming in packs, turbulence).`,
