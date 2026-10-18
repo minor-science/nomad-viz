@@ -34,6 +34,17 @@ export class Metronomes {
   readonly segTempo: Float32Array; // each segment's tempo offset, from -1 to 1
   readonly segR: Float32Array; // how much in step each segment is, 0 to 1
   readonly segPsi: Float32Array;
+  /** Each metronome's actual tempo (phase per step, smoothed), and each village's. */
+  readonly rate: Float32Array;
+  readonly segRate: Float32Array;
+  /** Per village: 1 while it beats as a pacemaker, pulling neighbors into its own count. */
+  readonly pacemaker: Uint8Array;
+  /** Per village: how many outside metronomes keep its tempo, locked in step or carried in waves. */
+  readonly locked: Uint16Array;
+  readonly carried: Uint16Array;
+  /** Per metronome: the village whose pacemaker it now follows, or -1. */
+  readonly follows: Int16Array;
+  private prevTheta: Float32Array;
   segments: number;
   /** The board's swing, 0 (still) to 1 (every metronome in step), and its phase. */
   R = 0;
@@ -55,6 +66,13 @@ export class Metronomes {
     this.segTempo = new Float32Array(segments);
     this.segR = new Float32Array(segments);
     this.segPsi = new Float32Array(segments);
+    this.rate = new Float32Array(this.n);
+    this.segRate = new Float32Array(segments);
+    this.pacemaker = new Uint8Array(segments);
+    this.locked = new Uint16Array(segments);
+    this.carried = new Uint16Array(segments);
+    this.follows = new Int16Array(this.n).fill(-1);
+    this.prevTheta = new Float32Array(this.n);
     // Territories: the cells nearest to each of a few scattered centers.
     const cx = Array.from({ length: segments }, () => rand() * w);
     const cy = Array.from({ length: segments }, () => rand() * h);
@@ -79,7 +97,67 @@ export class Metronomes {
 
   /** Advance one step, in `sub` substeps so that strong couplings stay numerically smooth. */
   step(p: OscParams, sub = 4) {
+    this.prevTheta.set(this.theta);
     for (let k = 0; k < sub; k++) this.substep(p, 1 / sub);
+    // Actual tempo: the phase advanced this step, unwrapped and smoothed.
+    for (let i = 0; i < this.n; i++) {
+      let d = this.theta[i] - this.prevTheta[i];
+      if (d < -Math.PI) d += 2 * Math.PI;
+      else if (d > Math.PI) d -= 2 * Math.PI;
+      this.rate[i] += (d - this.rate[i]) * 0.05;
+    }
+  }
+
+  /**
+   * Pacemakers. A village that keeps a coherent beat faster than the field around it pulls its
+   * neighbors to its tempo, as the fastest region of a field of oscillators does. Spreading out
+   * from its border through metronomes that keep its tempo, each one is either locked in step with
+   * it (the village hardening into a center of its own) or carrying its beat on as a wave (the
+   * village giving birth to waves). A village counts as a pacemaker once its following outnumbers
+   * half its own size.
+   */
+  findPacemakers(tol = 0.004, lead = 0.01) {
+    const { w, h, n, seg, rate, segments, follows, theta } = this;
+    const size = new Float32Array(segments);
+    this.segRate.fill(0);
+    for (let i = 0; i < n; i++) {
+      this.segRate[seg[i]] += rate[i];
+      size[seg[i]]++;
+    }
+    for (let k = 0; k < segments; k++) this.segRate[k] /= Math.max(1, size[k]);
+    // The field's own mean tempo: a pacemaker has to beat clearly faster than this, or it is only
+    // keeping the common beat like everyone else.
+    let fieldRate = 0;
+    for (let i = 0; i < n; i++) fieldRate += rate[i];
+    fieldRate /= n;
+    follows.fill(-1);
+    this.locked.fill(0);
+    this.carried.fill(0);
+    this.pacemaker.fill(0);
+    for (let k = 0; k < segments; k++) {
+      if (this.segR[k] < 0.8 || this.segRate[k] - fieldRate < lead) continue;
+      // Breadth-first from the village's border, through outside metronomes at its tempo.
+      const queue: number[] = [];
+      for (let i = 0; i < n; i++) if (seg[i] === k) queue.push(i);
+      let head = 0;
+      while (head < queue.length) {
+        const i = queue[head++];
+        const x = i % w;
+        const y = (i / w) | 0;
+        for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1]) {
+          if (j < 0 || seg[j] === k || follows[j] !== -1 || this.kind[j] === CAUGHT) continue;
+          if (Math.abs(rate[j] - this.segRate[k]) > tol) continue;
+          follows[j] = k;
+          queue.push(j);
+          if (Math.cos(theta[j] - this.segPsi[k]) > 0.85) this.locked[k]++;
+          else this.carried[k]++;
+        }
+      }
+      // A village only leads if it beats faster than what it pulls in; otherwise it is following.
+      const reach = this.locked[k] + this.carried[k];
+      if (reach > 0.5 * size[k]) this.pacemaker[k] = 1;
+      else for (let i = 0; i < n; i++) if (follows[i] === k) follows[i] = -1;
+    }
   }
 
   private substep(p: OscParams, dt: number) {
@@ -123,7 +201,14 @@ export class Metronomes {
       if (x < w - 1) local += Math.sin(theta[i + 1] - t - p.lag);
       if (y > 0) local += Math.sin(theta[i - w] - t - p.lag);
       if (y < h - 1) local += Math.sin(theta[i + w] - t - p.lag);
-      d += (p.neighborField ? p.neighborField[x] : p.neighbor) * local * 0.25;
+      // The lag's constant shift is taken out (adding sin(lag) for each neighbor), so neighbors in
+      // step keep their natural tempo and the lag only shapes the waves.
+      let count = 0;
+      if (x > 0) count++;
+      if (x < w - 1) count++;
+      if (y > 0) count++;
+      if (y < h - 1) count++;
+      d += (p.neighborField ? p.neighborField[x] : p.neighbor) * (local + count * Math.sin(p.lag)) * 0.25;
       next[i] = t + d * dt + amp * (this.rand() * 2 - 1);
     }
     for (let i = 0; i < n; i++) theta[i] = ((next[i] % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);

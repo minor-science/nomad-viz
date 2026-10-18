@@ -2,6 +2,7 @@ import { Waves } from 'lucide-react';
 import type { ModelDef, SimInstance, Frame, Mode, Narration } from '../sim/types';
 import { Metronomes, CAUGHT, SEGMENT, WAVE, type OscParams } from '../sim/oscillators';
 import { Drive, type DriveSettings } from '../sim/metronomeDrive';
+import { Wobble } from '../sim/heating';
 import { beginTags, drawTag, StickyTag } from '../sim/tags';
 
 // Nomadology in a world where everything is acoustic. Underneath is a physics-class experiment:
@@ -96,6 +97,65 @@ const MIXTURE: Caption = {
   sub: 'Smooth and striated “exist only in mixture” (Plateaus: 474).',
   color: '#cbd5e1',
 };
+// One-way acts and lines of flight, reported when a crossing runs well above its usual level.
+// CROSSING[from][to], in the order in step with the bell, own village, carried by waves.
+const CROSSING: (Caption | null)[][] = [
+  [
+    null,
+    {
+      head: 'WARDING OFF · Villages slip out of the bell’s count back into their own hours (segments leave the common beat).',
+      sub: 'Centers “do not all resonate together, they do not fall on the same point” (Plateaus: 211).',
+      color: YELLOW,
+    },
+    {
+      head: 'LINE OF FLIGHT · CAPTURE TURNS WAR MACHINE · Ranks that kept the bell’s count break step and catch their neighbors’ rhythm instead (the common beat breaks into waves).',
+      sub: '“The numbering number is rhythmic, not harmonic” (Plateaus: 390).',
+      color: MAGENTA,
+    },
+  ],
+  [
+    {
+      head: 'CAPTURE · OVERCODING · Villages fall into the bell’s count and lose their own hours (segments lock to the common beat).',
+      sub: 'Segments “begin to resonate in a center acting as their common denominator” (Plateaus: 212).',
+      color: CYAN,
+    },
+    null,
+    {
+      head: 'LINE OF FLIGHT · WARDING OFF GIVES BIRTH TO A WAR MACHINE · A village’s beat spills over its ground and runs on as waves (segments break into traveling waves).',
+      sub: 'In the band, a member who leaves “will not leave alone but will take along his allies” (Plateaus: 358).',
+      color: MAGENTA,
+    },
+  ],
+  [
+    {
+      head: 'CAPTURE · APPROPRIATION · Waves reaching the counted field are pulled into the bell’s count: the beat that passed from neighbor to neighbor now keeps the center’s time (entrainment).',
+      sub: '“it is only in State armies, and for reasons of discipline and show, that one marches in cadence” (Plateaus: 390).',
+      color: CYAN,
+    },
+    {
+      head: 'WARDING OFF · Waves settle into villages, each keeping its own hours on its own ground (traveling waves lock into segments).',
+      sub: '“the circles are not concentric, and the two segments require a third segment through which to communicate” (Plateaus: 433).',
+      color: YELLOW,
+    },
+    null,
+  ],
+];
+const RAID: Caption = {
+  head: 'WAR MACHINE · THE RAID · A surge of contagion sweeps across the counted field: the bell’s count breaks where it passes and closes again behind it (a traveling patch of strong coupling).',
+  sub: 'The war machine “does not necessarily have war as its object (for example, the raid can be seen as another object, rather than as a particular form of war)” (Plateaus: 417).',
+  color: MAGENTA,
+};
+const HARDENED: Caption = {
+  head: 'LINE OF FLIGHT · WARDING OFF HARDENS INTO A STATE · A village beating faster than the field pulls its neighbors into its own count, a second bell (a pacemaker).',
+  sub: '“Special institutions are thus necessary to enable a chief to become a man of State, but diffuse, collective mechanisms are just as necessary to prevent a chief from becoming one” (Plateaus: 357).',
+  color: CYAN,
+};
+const WAVES_BORN: Caption = {
+  head: 'LINE OF FLIGHT · WARDING OFF GIVES BIRTH TO A WAR MACHINE · A village beating faster than the field sends its beat outward in rings that carry it across the field (target waves from a pacemaker).',
+  sub: 'In the band, a member who leaves “will not leave alone but will take along his allies” (Plateaus: 358).',
+  color: MAGENTA,
+};
+
 const MODE_CAPTION: Partial<Record<Mode, Caption>> = {
   state: {
     head: 'CAPTURE ALONE · A loud bell at the center and no villages to resist it: everyone falls into one count, with the field swaying in time (global synchrony).',
@@ -126,7 +186,27 @@ function create(): SimInstance {
   // What a lost feature turned into, fixed when its loss is first reported.
   const fate = { rank: null as string | null, band: null as string | null, wave: null as string | null };
   const history = { R: [] as number[], segment: [] as number[], wave: [] as number[], mobilized: [] as number[] };
+  // Raids: patches of strong neighbor coupling that travel across the field. Crossings: each
+  // metronome's regime, how long it has held, and the one it came from (a ring), counted over a
+  // window against their usual level. Pacemakers: villages leading their neighbors.
+  let raids: { x: number }[] = [];
+  let raidDue = 0;
+  let raidStarted = false;
+  const raidWobble = new Wobble();
+  const cur = new Uint8Array(W * H);
+  const stay = new Uint16Array(W * H);
+  const ring = new Uint8Array(W * H).fill(255);
+  const SETTLE = 20;
+  const WINDOW = 60;
+  const recent: number[][][] = [];
+  const usual = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  let prevPace = new Uint8Array(SEGMENTS);
+  let paceEvent: Caption | null = null;
+  const villageX = new Float32Array(SEGMENTS);
+  const villageY = new Float32Array(SEGMENTS);
   const tags = {
+    raid: new StickyTag<{ x: number }>(2000),
+    pacemaker: new StickyTag<number>(600),
     rank: new StickyTag<{ x: number; y: number }>(300),
     band: new StickyTag<{ x: number; y: number }>(300),
     wave: new StickyTag<{ x: number; y: number }>(300),
@@ -136,6 +216,27 @@ function create(): SimInstance {
     init() {
       field = new Metronomes(W, H, SEGMENTS);
       drive = new Drive(W);
+      raids = [];
+      raidDue = 0;
+      cur.fill(0);
+      stay.fill(0);
+      ring.fill(255);
+      recent.length = 0;
+      for (const row of usual) row.fill(0);
+      prevPace = new Uint8Array(SEGMENTS);
+      // Each village's center, for marking pacemakers.
+      const count = new Float32Array(SEGMENTS);
+      villageX.fill(0);
+      villageY.fill(0);
+      for (let i = 0; i < field.n; i++) {
+        villageX[field.seg[i]] += i % W;
+        villageY[field.seg[i]] += (i / W) | 0;
+        count[field.seg[i]]++;
+      }
+      for (let k = 0; k < SEGMENTS; k++) {
+        villageX[k] /= Math.max(1, count[k]);
+        villageY[k] /= Math.max(1, count[k]);
+      }
       for (const k of Object.keys(history) as (keyof typeof history)[]) history[k].length = 0;
     },
 
@@ -169,9 +270,47 @@ function create(): SimInstance {
           };
           p = drive.step(field.R, s, base);
         }
+        // Raids arrive in uneven surges (more often in war-machine mode) and sweep across the field.
+        if (mode === 'conflict' || mode === 'nomad') {
+          raidDue += params.raids * (mode === 'nomad' ? 3 : raidWobble.step(1, 0.002));
+          if (raidDue >= 1) {
+            raidDue -= 1;
+            raids.push({ x: 0 });
+            raidStarted = true;
+          }
+        }
+        if (raids.length) {
+          const fieldK = p.neighborField ? p.neighborField : new Float32Array(W).fill(p.neighbor);
+          for (const r of raids) for (let x = 0; x < W; x++) fieldK[x] += 2.5 * Math.exp(-((x - r.x) ** 2) / 9);
+          p = { ...p, neighborField: fieldK };
+          for (const r of raids) r.x += 0.15;
+          raids = raids.filter((r) => r.x < W + 5);
+        }
         field.step(p);
       }
       fractions = field.classify();
+      // Crossings: a metronome that settles into a new regime keeps a ring in the old one's color.
+      const moves = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+      for (let i = 0; i < field.n; i++) {
+        const now = field.kind[i];
+        if (now === cur[i]) {
+          if (stay[i] < 60000) stay[i]++;
+          if (stay[i] === SETTLE && ring[i] !== 255 && ring[i] !== now) moves[ring[i]][now]++;
+          continue;
+        }
+        if (stay[i] >= SETTLE) ring[i] = cur[i];
+        cur[i] = now;
+        stay[i] = 0;
+      }
+      recent.push(moves);
+      if (recent.length > WINDOW) recent.shift();
+      for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) usual[a][b] += (moves[a][b] - usual[a][b]) * 0.003;
+      // Pacemakers, and whether a new one is hardening into a second bell or sending out waves.
+      field.findPacemakers();
+      for (let k = 0; k < SEGMENTS; k++) {
+        if (field.pacemaker[k] && !prevPace[k]) paceEvent = field.locked[k] > field.carried[k] ? HARDENED : WAVES_BORN;
+      }
+      prevPace = Uint8Array.from(field.pacemaker);
       const n = history.R.length;
       history.R.push(field.R);
       history.segment.push(fractions[SEGMENT]);
@@ -227,6 +366,28 @@ function create(): SimInstance {
         ctx.globalAlpha = 1;
       }
 
+      // Metronomes that have just crossed over keep a ring, in the color they came from, at the base
+      // of their arm. Pacemaker villages are circled: cyan while they pull neighbors into their own
+      // count, magenta while their beat runs out as waves.
+      ctx.lineWidth = 2;
+      for (let i = 0; i < field.n; i++) {
+        if (ring[i] === 255 || stay[i] > 120 || stay[i] < SETTLE) continue;
+        ctx.strokeStyle = KIND_COLOR[ring[i]];
+        ctx.beginPath();
+        ctx.arc(((i % W) + 0.5) * sx + sway, (((i / W) | 0) + 0.75) * sy, 4, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 8]);
+      for (let k = 0; k < SEGMENTS; k++) {
+        if (!field.pacemaker[k]) continue;
+        ctx.strokeStyle = field.locked[k] > field.carried[k] ? CYAN : MAGENTA;
+        ctx.beginPath();
+        ctx.ellipse((villageX[k] + 0.5) * sx + sway, (villageY[k] + 0.5) * sy, 5 * sx, 5 * sy, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
       // Narration. In conflict it names who is gaining on whom over the last few seconds.
       {
         let cap = MODE_CAPTION[mode] ?? null;
@@ -236,7 +397,29 @@ function create(): SimInstance {
           // A caption whose process has nearly vanished may change sooner, so it never contradicts the field.
           const shown = caption === MIXTURE ? -1 : HOLDING.includes(caption) ? HOLDING.indexOf(caption) : GAINS.findIndex((row) => row.includes(caption));
           const stale = shown >= 0 && [field.R, fractions[SEGMENT], fractions[WAVE]][shown] < 0.25;
-          if ((captionAge > PHASE_HOLD || (stale && captionAge > 60)) && m > TREND) {
+          // Events first: a raid as it begins, a new pacemaker, then any crossing running well above
+          // its usual level.
+          let event: Caption | null = raidStarted ? RAID : paceEvent;
+          if (!event && recent.length === WINDOW) {
+            let best = 1.6;
+            for (let a = 0; a < 3; a++) {
+              for (let b = 0; b < 3; b++) {
+                if (a === b || !CROSSING[a][b]) continue;
+                const sum = recent.reduce((acc, mv) => acc + mv[a][b], 0);
+                const ratio = sum / Math.max(1, usual[a][b] * WINDOW);
+                if (sum >= 30 && ratio > best) {
+                  best = ratio;
+                  event = CROSSING[a][b];
+                }
+              }
+            }
+          }
+          raidStarted = false;
+          paceEvent = null;
+          if (event && event !== caption && captionAge > 90) {
+            caption = event;
+            captionAge = 0;
+          } else if ((captionAge > PHASE_HOLD || (stale && captionAge > 60)) && m > TREND) {
             const series = [history.R, history.segment, history.wave];
             const delta = series.map((s) => s[m - 1] - s[m - 1 - TREND]);
             const gainer = delta.indexOf(Math.max(...delta));
@@ -275,6 +458,29 @@ function create(): SimInstance {
       // Explain layer: a rank in step, a band in its own time, a wave, and the board.
       if (f.explain) {
         beginTags(f.keepClear);
+        // A raid, followed as it sweeps across the field.
+        tags.raid.update(
+          (r) => (raids.includes(r) ? { x: r.x * sx + sway, y: H * 0.25 * sy } : null),
+          () => (raids.length ? { anchor: raids[raids.length - 1], x: raids[raids.length - 1].x * sx + sway, y: H * 0.25 * sy } : null),
+        );
+        tags.raid.draw(ctx, 'WAR MACHINE · a raid: contagion sweeping across the counted field, breaking the count as it passes', MAGENTA, { width, height }, 'WAR MACHINE · the raid has moved on, and the count closes behind it');
+        // A pacemaker village, if there is one in the upper part of the field.
+        tags.pacemaker.update(
+          (k) => (field!.pacemaker[k] ? { x: (villageX[k] + 0.5) * sx + sway, y: (villageY[k] + 0.5) * sy } : null),
+          () => {
+            for (let k = 0; k < SEGMENTS; k++) if (field!.pacemaker[k] && villageY[k] < H * 0.6) return { anchor: k, x: (villageX[k] + 0.5) * sx + sway, y: (villageY[k] + 0.5) * sy };
+            return null;
+          },
+        );
+        const pk = tags.pacemaker.current;
+        const hardening = pk !== null && field.locked[pk] > field.carried[pk];
+        tags.pacemaker.draw(
+          ctx,
+          hardening ? 'LINE OF FLIGHT · a village hardening into a second bell, pulling its neighbors into its own count' : 'LINE OF FLIGHT · a village whose faster beat runs outward as waves',
+          hardening ? CYAN : MAGENTA,
+          { width, height },
+          'WARDING OFF · this village has fallen back to keeping only its own hours',
+        );
         const bounds = { width, height };
         const share = (a: { x: number; y: number }, kind: number) => {
           let c = 0;
@@ -363,6 +569,7 @@ export const acoustic: ModelDef = {
     { kind: 'slider', key: 'spread', label: 'Villages’ Tempo Spread at Rest', min: 0, max: 1.2, step: 0.05, default: 0.3, tint: 'yellow', format: 'dec2' },
     { kind: 'slider', key: 'alarm', label: 'Villages’ Alarm (board swing)', min: 0.4, max: 0.95, step: 0.05, default: 0.8, tint: 'yellow', format: 'dec2' },
     { kind: 'slider', key: 'neighbor', label: 'Neighbors’ Pull (war machine)', min: 0, max: 1.5, step: 0.05, default: 0.8, tint: 'magenta', format: 'dec2' },
+    { kind: 'slider', key: 'raids', label: 'Raids on the Counted Field', min: 0, max: 0.01, step: 0.0005, default: 0.002, tint: 'magenta', format: 'x1000' },
     { kind: 'slider', key: 'surge', label: 'Surges (unevenness)', min: 0, max: 2, step: 0.1, default: 1, tint: 'magenta', format: 'dec2' },
     { kind: 'slider', key: 'pace', label: 'Surge Pace', min: 0.0005, max: 0.006, step: 0.0005, default: 0.002, tint: 'magenta', format: 'x1000' },
     { kind: 'slider', key: 'speed', label: 'Steps per Snapshot', min: 0.5, max: 4, step: 0.5, default: 1, tint: 'ink', format: 'dec2', divider: true },
@@ -377,6 +584,9 @@ export const acoustic: ModelDef = {
     { process: 'wardingOff', heading: '03 / Warding off', text: 'Villages keeping their own hours: each village keeps its own tempo, and as the bell at the center grows louder they spread their tempi wider, so the common count falls away before it can hold. Centers “do not all resonate together, they do not fall on the same point” (Plateaus: 211).' },
   ],
   legend: [
+    { swatch: MAGENTA, see: 'A band of ripples sweeping across', social: 'a raid: contagion sweeping across the counted field, breaking the count as it passes and moving on', physics: 'a patch of strong neighbor coupling traveling across the field', atp: '“the raid can be seen as another object, rather than as a particular form of war” (Plateaus: 417)' },
+    { swatch: CYAN, see: 'Dashed circles around a village', social: 'a village leading its neighbors: cyan as it hardens into a second bell, magenta as its beat runs out as waves', physics: 'a pacemaker, a region beating faster than the field, which entrains its neighbors or sends out target waves', atp: 'mechanisms are needed “to prevent a chief from becoming one” (Plateaus: 357)' },
+    { swatch: INK, see: 'Small rings at the base of arms', social: 'metronomes that have just crossed over: waves drawn into the count, villages overcoded, ranks breaking step', physics: 'a metronome that has settled into a new regime, ringed in the color of the one it left', atp: '“The numbering number is rhythmic, not harmonic” (Plateaus: 390)' },
     { swatch: CYAN, see: 'Cyan metronomes, and the field swaying', social: 'one bell for all: everyone’s hours rung from the center, the way a church bell sets the hours of work and prayer and armies march in step', physics: 'metronomes in step with the board, which sways with their common beat (cf. Huygens 1665, Pantaleone 2002)', atp: 'the central point “acts as a point of resonance on the horizon, behind all the other points” (Plateaus: 224)', example: 'troops marching in cadence “for reasons of discipline and show” (390)' },
     { swatch: YELLOW, see: 'Yellow metronomes', social: 'villages keeping their own hours, so no single bell can set the hours for everyone', physics: 'segments, each locked together at its own tempo, the spread of tempi raising the threshold for synchrony (Kuramoto)', atp: 'centers “do not all resonate together, they do not fall on the same point” (Plateaus: 211)', example: 'a chief who can call but not command, “always in danger of being disavowed” (357, cf. Clastres)' },
     { swatch: MAGENTA, see: 'Magenta metronomes', social: 'contagion: the beat caught from neighbor to neighbor, like a wave through a crowd, counted by no one', physics: 'traveling waves of phase, from neighbors hearing each other with a delay', atp: '“Bands, human or animal, proliferate by contagion” (Plateaus: 241)', example: 'a pack in which each “may be in the center, and then, immediately afterwards, at the edge” (33, citing Canetti)' },
