@@ -50,6 +50,11 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   const [isPlaying, setIsPlaying] = useState(!isReducedMotion);
   const [showControls, setShowControls] = useState(false);
   const [explain, setExplain] = useState(true);
+  // Full screen: the canvas alone, with no labels, legend, or narrator. It fills the window (and the
+  // screen, where the browser allows it); Escape, or the exit link that shows when the pointer
+  // moves, returns.
+  const [immersive, setImmersive] = useState(false);
+  const [pointerMoved, setPointerMoved] = useState(false);
   // The legend starts open on wide screens and closed on phones, where it would cover the canvas.
   const [showLegend, setShowLegend] = useState(() => window.matchMedia('(min-width: 768px)').matches);
   const [narration, setNarration] = useState<Narration | null>(null);
@@ -64,7 +69,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   const live = useRef({ mode, params, motionScale: isReducedMotion ? 0.2 : 1, explain: true });
   const world = useRef({ width: 0, height: 0, time: 0, ready: false });
 
-  live.current = { mode, params, motionScale: isReducedMotion ? 0.2 : 1, explain };
+  live.current = { mode, params, motionScale: isReducedMotion ? 0.2 : 1, explain: explain && !immersive };
   const isPlayingRef = useRef(isPlaying);
   isPlayingRef.current = isPlaying;
 
@@ -153,7 +158,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   useEffect(() => {
     if (!isPlaying && isReducedMotion) renderStill();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, params, explain]);
+  }, [mode, params, explain, immersive]);
 
   // Settings that change the number of bodies restart the simulation.
   const reinitKey = model.controls
@@ -189,6 +194,43 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
   useEffect(() => {
     onAnnounce?.(`${model.name} model switched to ${MODE_BUTTONS.find((b) => b.mode === mode)?.label} mode`);
   }, [mode, model.name, onAnnounce]);
+
+  const enterImmersive = () => {
+    setImmersive(true);
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  };
+  const exitImmersive = () => {
+    setImmersive(false);
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+  };
+  useEffect(() => {
+    if (!immersive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') exitImmersive();
+    };
+    // Leaving the browser's full screen (its own Escape or gesture) also leaves this view.
+    const onFs = () => {
+      if (!document.fullscreenElement) setImmersive(false);
+    };
+    let hide = 0;
+    const onMove = () => {
+      setPointerMoved(true);
+      window.clearTimeout(hide);
+      hide = window.setTimeout(() => setPointerMoved(false), 2000);
+    };
+    window.addEventListener('keydown', onKey);
+    document.addEventListener('fullscreenchange', onFs);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerdown', onMove);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('fullscreenchange', onFs);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerdown', onMove);
+      window.clearTimeout(hide);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [immersive]);
 
   const set = (key: string, value: number) => setParams((p) => ({ ...p, [key]: value }));
   const text = isHighVis ? 'text-sm' : 'text-xs';
@@ -286,6 +328,9 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
           <button onClick={() => setShowControls(!showControls)} aria-expanded={showControls} className={toggle(showControls)}>
             Controls
           </button>
+          <button onClick={enterImmersive} className={toggle(false)}>
+            Full screen
+          </button>
         </div>
       </div>
 
@@ -321,9 +366,17 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
       )}
 
       <div className="relative flex-1 bg-black flex overflow-hidden min-h-0">
-        <div ref={wrapRef} className="flex-1 relative overflow-hidden" role="img" aria-label={model.describe(mode)}>
+        <div ref={wrapRef} className={immersive ? 'fixed inset-0 z-[200] bg-black overflow-hidden' : 'flex-1 relative overflow-hidden'} role="img" aria-label={model.describe(mode)}>
           <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
-          {showLegend && model.legend && (
+          {immersive && (
+            <button
+              onClick={exitImmersive}
+              className={`absolute right-4 top-3 text-sm text-white/70 hover:text-white transition-opacity duration-500 ${pointerMoved ? 'opacity-100' : 'opacity-0'}`}
+            >
+              Exit full screen
+            </button>
+          )}
+          {!immersive && showLegend && model.legend && (
             <div ref={legendRef} className="absolute left-3 bottom-3 max-w-[420px] bg-black/75 px-3 py-2 space-y-1" aria-label="Legend">
               {model.legend.map((r) => (
                 <div key={r.see} className={`flex gap-2 items-baseline ${isHighVis ? 'text-xs' : 'text-[11px]'} leading-snug`}>
@@ -336,7 +389,7 @@ export function ModelShell({ model, isReducedMotion = false, isHighVis = false, 
               ))}
             </div>
           )}
-          {isReducedMotion && !isPlaying && (
+          {!immersive && isReducedMotion && !isPlaying && (
             <span className={`absolute right-3 bottom-3 ${text} text-white/60`}>Still frame. Press play to animate.</span>
           )}
         </div>
