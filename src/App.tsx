@@ -26,6 +26,22 @@ export default function App() {
   const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [announcement, setAnnouncement] = useState('');
   const models = ORDER.map((id) => MODELS.find((m) => m.id === id)!).filter(Boolean);
+  const tabs = (pad: string) =>
+    models.map((m) => (
+      <button
+        key={m.id}
+        onClick={() => {
+          // A new model starts from its own defaults, so drop the old model's settings from the URL.
+          window.history.replaceState(null, '', `${window.location.pathname}?model=${m.id}`);
+          setActiveModel(m.id);
+          setAnnouncement(`${m.name} model`);
+        }}
+        aria-current={activeModel === m.id ? 'page' : undefined}
+        className={`${pad} whitespace-nowrap border-b-2 ${activeModel === m.id ? 'border-white text-white' : 'border-transparent text-white/50 hover:text-white/80'}`}
+      >
+        {m.name}
+      </button>
+    ));
 
   return (
     <div className={`flex flex-col h-screen bg-[#0b1220] text-[#e5e7eb] font-sans overflow-hidden ${highContrast ? 'high-contrast' : ''}`}>
@@ -33,33 +49,25 @@ export default function App() {
         {announcement}
       </div>
 
-      <header className="shrink-0 flex items-center gap-4 sm:gap-6 px-4 h-12 border-b border-white/10 min-w-0">
-        <h1 className="hidden sm:block text-sm font-semibold tracking-tight whitespace-nowrap">Nomadology Visualizer</h1>
-        <nav className="flex gap-4 overflow-x-auto min-w-0 text-sm" aria-label="Models">
-          {models.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => {
-                // A new model starts from its own defaults, so drop the old model's settings from the URL.
-                window.history.replaceState(null, '', `${window.location.pathname}?model=${m.id}`);
-                setActiveModel(m.id);
-                setAnnouncement(`${m.name} model`);
-              }}
-              aria-current={activeModel === m.id ? 'page' : undefined}
-              className={`py-3 whitespace-nowrap border-b-2 ${activeModel === m.id ? 'border-white text-white' : 'border-transparent text-white/50 hover:text-white/80'}`}
-            >
-              {m.name}
+      <header className="shrink-0 border-b border-white/10">
+        <div className="flex items-center gap-6 px-4 h-12 min-w-0">
+          <h1 className="text-sm font-semibold tracking-tight whitespace-nowrap">Nomadology Visualizer</h1>
+          <nav className="hidden sm:flex gap-4 min-w-0 text-sm" aria-label="Models">
+            {tabs('py-3')}
+          </nav>
+          <div className="ml-auto flex gap-4 shrink-0">
+            <button onClick={() => setShowSources(true)} className="text-sm text-white/60 hover:text-white">
+              Sources
             </button>
-          ))}
-        </nav>
-        <div className="ml-auto flex gap-4 shrink-0">
-          <button onClick={() => setShowSources(true)} className="text-sm text-white/60 hover:text-white">
-            Sources
-          </button>
-          <button onClick={() => setShowAbout(true)} className="text-sm text-white/60 hover:text-white">
-            About
-          </button>
+            <button onClick={() => setShowAbout(true)} className="text-sm text-white/60 hover:text-white">
+              About
+            </button>
+          </div>
         </div>
+        {/* On phones the models get a row of their own, so all four are always in view. */}
+        <nav className="sm:hidden grid grid-cols-4 px-2 text-sm text-center" aria-label="Models">
+          {tabs('py-2')}
+        </nav>
       </header>
 
       <main className="flex-1 min-h-0 min-w-0" aria-label={`${MODEL[activeModel].name} model`}>
