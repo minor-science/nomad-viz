@@ -29,6 +29,12 @@ export const acousticSources: ModelSources = {
   ],
   physics: [
     {
+      name: 'Pacemakers and target waves',
+      text: 'In a field of oscillators, a region that beats faster than its surroundings leads them: its neighbors lock to its tempo, or its beat spreads outward as rings (target waves). This model reads a coherent village beating clearly faster than the field, with outside metronomes keeping its tempo, as a pacemaker, hardening into a second bell when most of them lock in step, and sending out waves when most pass its beat to others.',
+      bib: ['kuramoto'],
+    },
+
+    {
       name: 'Kuramoto model',
       tex: '\\frac{d\\theta_i}{dt} = \\omega_i + K R \\sin(\\psi - \\theta_i), \\qquad R\\, e^{i\\psi} = \\frac{1}{N}\\sum_{j} e^{i\\theta_j}',
       text: 'Each oscillator runs at its own natural rate and is pulled toward the population’s mean phase in proportion to how coherent the population already is, so a little agreement breeds more. R measures that coherence, from 0 (no common beat) to 1 (all in step).',
@@ -55,6 +61,8 @@ export const acousticSources: ModelSources = {
   code:
     'In code, the field is 60 by 36 metronomes, each with a phase and a natural tempo, divided into twelve territories (the villages). Each step, taken in four substeps, adds three pulls to a metronome’s own tempo: toward the board’s phase in proportion to the board’s swing, toward its village’s mean phase, and toward its four neighbors with a phase lag of 0.6 radians. The board’s swing is the field’s mean beat, smoothed so that it builds and decays, while its phase follows the beat directly. Villages differ in tempo by a spread that, in conflict mode, rises when the board swings above an alarm level and relaxes below a calm level. Both the board’s pull and the neighbors’ pull, which comes in patches that drift across the field, surge by log-normal Ornstein-Uhlenbeck processes. Each metronome is read as in step with the board, in step with its village, or neither, and colored accordingly, while the whole field shifts sideways with the board’s swing.',
   divergences: [
+    { kind: 'model', text: 'Raids here are patches of strong neighbor coupling that travel across the field, a stand-in for a surge of contagion. Left alone, the neighbors’ phase lag would also shift every tempo by a constant, so that shift is taken out (adding the sine of the lag for each neighbor), leaving in-step neighbors at their natural tempo.', bib: ['kuramoto'] },
+
     { kind: 'science', text: 'Plateaus keeps frequency for the town and resonance for the State (433). In physics, synchrony is a locking of frequencies, so the model’s capture is literally one. It is called resonance here because a center on top, which every metronome drives and which drives them all, is what produces it.', bib: ['pantaleone'] },
     { kind: 'model', text: 'Spreading the villages’ tempi when the board starts to swing is this model’s device for anticipation, chosen so that the three take the lead in turn. Real metronomes do not retune themselves, and anticipation in Plateaus is a social mechanism (440).', bib: ['clastres'] },
     { kind: 'model', text: 'Huygens first saw opposite-phase locking, which this model omits. Plateaus gives the State the opposition of segments “two by two” (223), so opposed pairs would read as capture rather than warding off.', bib: ['bennett'] },

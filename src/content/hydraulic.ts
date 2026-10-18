@@ -29,6 +29,11 @@ export const hydraulicSources: ModelSources = {
   ],
   physics: [
     {
+      name: 'A traveling hot spot',
+      text: 'Raids here are patches of strong heating that travel downstream with the flow. Where one passes, the layers break into turbulence, and once it has moved on the through-flow lays them down again. A puff of turbulence alone dies out at this flow’s low speed, as real puffs do below a critical Reynolds number, so the raid carries its own heat.',
+    },
+
+    {
       name: 'Navier-Stokes equations with buoyancy (Boussinesq)',
       tex: '\\frac{\\partial \\mathbf{u}}{\\partial t} + (\\mathbf{u}\\cdot\\nabla)\\mathbf{u} = -\\frac{1}{\\rho}\\nabla p + \\nu \\nabla^2 \\mathbf{u} + g\\beta (T - T_0)\\,\\hat{\\mathbf{z}}, \\qquad \\frac{\\partial T}{\\partial t} + \\mathbf{u}\\cdot\\nabla T = \\kappa \\nabla^2 T',
       text: 'These are the equations of motion for a viscous liquid whose warmer parts rise, carrying and conducting heat as they move, solved here on a grid by Stam’s method with MacCormack’s less diffusive advection.',
@@ -56,6 +61,8 @@ export const hydraulicSources: ModelSources = {
   code:
     'On a grid 180 cells long and 30 deep, each step carries the temperature with the flow and conducts it, adds buoyancy, then diffuses, projects to zero divergence, advects by MacCormack’s method, and projects again. Four heaters that drift along the floor set its temperature, each with its own log-normal Ornstein-Uhlenbeck strength, while the ceiling stays cold. In conflict mode the through-flow at the left wavers by the same kind of process. Each spot of liquid is read from running averages of its vertical motion: layers where that motion is small compared with the lengthwise flow, cells where it is steady, eddies where it keeps changing. Dye enters from eight sources at the left. A particle counts as intact while it stays within one and a half cells of its source’s height, so the conduit’s front in each lane is its farthest intact particle. Particles that stray count as held or scattered according to the reading where they are, while the narrator’s chart tracks the front’s average reach and those two shares. A dim field of tracers, colored by the same reading, shows the cells and eddies where no dye has reached.',
   divergences: [
+    { kind: 'model', text: 'Crossings between layers, cells, and eddies are read from the dye: a particle that settles into a new regime keeps a ring in the color of the old one, and the narrator reports a crossing when it runs well above its usual level. Hardening, warding off turning into capture, is left out here, since the convection rolls that could align with the flow and become channels exist only in three dimensions.' },
+
     { kind: 'science', text: 'Plateaus sets laminar against turbulent as State against nomad. In physics the same liquid does both, depending on how fast it flows and how strongly it is heated, which the model keeps: one liquid, three regimes, with no separate substance for each process.', bib: ['reynolds', 'rayleigh'] },
     { kind: 'model', text: 'Plateaus never mentions convection cells. They stand for warding off here because they perform its function, small equal circles that turn side by side, none at the center, holding the flow in place ahead of the conduit’s front. Cells do not anticipate anything, though, and anticipation in Plateaus is a social mechanism (440), so the likeness is of function, not of cause.', bib: ['benard', 'clastres'] },
     { kind: 'model', text: 'Reading the dye as labor is this model’s interpretation, drawn from Plateaus (368), so the corvée, the households, and the journeymen in the labels illustrate that reading rather than anything in the physics.', bib: ['querrien', 'wittfogel'] },
