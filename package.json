@@ -1,7 +1,7 @@
 {
   "name": "nomad-viz",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Nomadology Visualizer: physical models of the machinic processes in Deleuze and Guattari's A Thousand Plateaus",
   "license": "Apache-2.0",
   "author": "Andrew Culp",
@@ -16,7 +16,9 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "check:atp": "node --experimental-strip-types --no-warnings scripts/check-atp.ts"
+    "check:atp": "node --experimental-strip-types --no-warnings scripts/check-atp.ts",
+    "sim": "node --experimental-strip-types --no-warnings --import ./scripts/resolve.mjs scripts/run-model.ts",
+    "check": "npm run lint && npm run build"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -35,5 +37,17 @@
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
-  }
+  },
+  "homepage": "https://nomad-viz.vercel.app",
+  "keywords": [
+    "Deleuze",
+    "Guattari",
+    "A Thousand Plateaus",
+    "nomadology",
+    "war machine",
+    "smooth and striated",
+    "simulation",
+    "philosophy",
+    "visualization"
+  ]
 }

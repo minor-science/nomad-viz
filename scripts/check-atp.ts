@@ -52,11 +52,18 @@ for (const [model, s] of Object.entries(models)) {
 
 // Inline quotations in the model cards and the app's sidebar and info text.
 const root = new URL('../src/', import.meta.url).pathname;
-const files = [...readdirSync(root + 'models').map((f) => 'models/' + f), 'App.tsx'];
+// Quotations in the documentation (the README and docs/) are checked the same way.
+const repo = new URL('../', import.meta.url).pathname;
+const files = [
+  ...readdirSync(root + 'models').map((f) => root + 'models/' + f),
+  root + 'App.tsx',
+  repo + 'README.md',
+  ...readdirSync(repo + 'docs').filter((f) => f.endsWith('.md')).map((f) => repo + 'docs/' + f),
+];
 for (const f of files) {
-  const text = readFileSync(root + f, 'utf8');
+  const text = readFileSync(f, 'utf8');
   for (const m of text.matchAll(/“([^”]+)”[^“(]{0,60}\((?:Plateaus: )?(\d{3})(?:[-,][^)]*)?\)/g)) {
-    check(f, parseInt(m[2], 10), m[1], 'inline ');
+    check(f.replace(repo, ''), parseInt(m[2], 10), m[1], 'inline ');
   }
 }
 

@@ -5,18 +5,25 @@ type: software
 authors:
   - family-names: Culp
     given-names: Andrew
-version: 0.1.0
+version: 1.0.0
+date-released: "2026-10-18"
+url: "https://nomad-viz.vercel.app"
 license: Apache-2.0
 repository-code: "https://github.com/minor-science/nomad-viz"
 abstract: >-
-  Interactive physical models of the machinic processes in Gilles Deleuze and
-  Félix Guattari's A Thousand Plateaus (capture, the war machine, warding off,
-  and others). Each model separates what Deleuze and Guattari write, the
-  sources they borrow from, and what the physics actually says.
+  Interactive physical simulations of the machinic processes in Gilles Deleuze
+  and Félix Guattari's A Thousand Plateaus. Four models (crystals, a liquid,
+  sound, gravity) each stage capture, the war machine, and warding off as the
+  behavior of one material, with lines of flight between them. Each model
+  separates what the book says, what it borrows, the physics it runs, and where
+  they part ways.
 keywords:
   - Deleuze
   - Guattari
   - nomadology
   - A Thousand Plateaus
   - smooth and striated space
+  - war machine
+  - apparatus of capture
+  - simulation
   - visualization
