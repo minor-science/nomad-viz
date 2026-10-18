@@ -81,6 +81,42 @@ const MODE_CAPTION: Partial<Record<Mode, { head: string; sub: string; color: str
 // Frames (snapshots) a phase caption stays up before it may change.
 const PHASE_HOLD = 150;
 
+// Lines of flight, reported as they happen.
+type Crossing = 'walled' | 'deserted' | 'seeded' | 'clanToSmith' | 'smithToClan';
+const CROSSINGS: Record<Crossing, { head: string; sub: string; color: string }> = {
+  walled: {
+    head: 'CAPTURE · APPROPRIATION · A smith is walled in by the stock, out of reach of any open solution, and stops carving: the State’s metallurgist now (trapped in a closed pocket).',
+    sub: '“What we call a military institution, or army, is not at all the war machine in itself, but the form under which it is appropriated by the State” (Plateaus: 418).',
+    color: '#00aeef',
+  },
+  deserted: {
+    head: 'LINE OF FLIGHT · CAPTURE TURNS WAR MACHINE · The stock around a walled-in smith is worn or carved open, and the smith escapes to carve again (the pocket opens).',
+    sub: '“Artisans-metallurgists are itinerants because they follow the matter-flow of the subsoil” (Plateaus: 412).',
+    color: '#ec008c',
+  },
+  seeded: {
+    head: 'LINE OF FLIGHT · WARDING OFF HARDENS INTO A STATE · A clan that sat too long on a forming cluster without mobilizing becomes the seed of a stock of its own (nucleation on a foreign particle).',
+    sub: '“Special institutions are thus necessary to enable a chief to become a man of State, but diffuse, collective mechanisms are just as necessary to prevent a chief from becoming one” (Plateaus: 357).',
+    color: '#00aeef',
+  },
+  clanToSmith: {
+    head: 'LINE OF FLIGHT · WARDING OFF GIVES BIRTH TO A WAR MACHINE · A mobilized clan reaches a grain boundary and leaves its territory to follow it as a smith.',
+    sub: 'In the band, a member who leaves “will not leave alone but will take along his allies” (Plateaus: 358).',
+    color: '#ec008c',
+  },
+  smithToClan: {
+    head: 'LINE OF FLIGHT · THE WAR MACHINE SETTLES · A smith with no boundary left to follow settles into a territory and wards off stocks as a clan.',
+    sub: 'The primitive assemblage “perseveres only by switching territories at the conclusion of each operation period” (Plateaus: 440).',
+    color: '#e0a800',
+  },
+};
+// Steps a clan must go without mobilizing before it may seed a stock (if it is on a surface then), and steps a smith must go
+// without carving anything before it may settle.
+/** Running counts of each crossing, read by tests (scripts and the Node checks). */
+export const crossingCounts: Record<string, number> = { walled: 0, deserted: 0, seeded: 0, clanToSmith: 0, smithToClan: 0 };
+const SEED_AFTER = 300;
+const SETTLE_AFTER = 300;
+
 function create(): SimInstance {
   let lg: LatticeGas | null = null;
   let smiths: Smiths | null = null;
@@ -101,6 +137,13 @@ function create(): SimInstance {
   let acc = 0;
   let smithAcc = 0;
   let sinceShift = 0;
+  // Agent counts are set from the sliders only when those change; crossings move agents between
+  // the two kinds, and losses are made up slowly, as new arrivals.
+  let placed = { smiths: -1, bands: -1, mode: '' };
+  let refill = 0;
+  let seeds: { i: number; age: number }[] = [];
+  let crossing: Crossing | null = null;
+  let crossingAge = 999;
   const tags = {
     capture: new StickyTag<number>(),
     // The embryo tag reports its outcome, whether it grew or dissolved, however briefly it was shown.
@@ -147,8 +190,17 @@ function create(): SimInstance {
       const sweeps = Math.floor(acc);
       acc -= sweeps;
       const scale = lg.n / REFERENCE_SITES;
-      smiths.place(smithing ? Math.round(params.smiths * scale) : 0);
-      bands.place(warding ? Math.round(params.bands * scale) : 0);
+      const smithTarget = smithing ? Math.round(params.smiths * scale) : 0;
+      const bandTarget = warding ? Math.round(params.bands * scale) : 0;
+      if (placed.smiths !== smithTarget || placed.bands !== bandTarget || placed.mode !== mode) {
+        smiths.place(smithTarget);
+        bands.place(bandTarget);
+        placed = { smiths: smithTarget, bands: bandTarget, mode };
+      } else if (++refill >= 30) {
+        refill = 0;
+        if (smiths.list.length < smithTarget) smiths.place(smiths.list.length + 1);
+        if (bands.list.length < bandTarget) bands.place(bands.list.length + 1);
+      }
       if (!warding) lg.blocked.fill(0);
       for (let k = 0; k < sweeps; k++) {
         lg.sweep(p, 1);
@@ -181,6 +233,93 @@ function create(): SimInstance {
           mobilization = Math.max(0, Math.min(params.wearMax, mobilization + (mobilized ? rate : -rate * RELAX_RATIO)));
         }
       }
+      // Lines of flight.
+      if (sweeps > 0) {
+        const { cols, rows } = lg;
+        const openNear = (i: number, r: number) => {
+          const x0 = i % cols;
+          const y0 = Math.floor(i / cols);
+          for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (!lg!.occ[(((y0 + dy) % rows + rows) % rows) * cols + (((x0 + dx) % cols + cols) % cols)]) return true;
+          return false;
+        };
+        const happenedSet = new Set<Crossing>();
+        // A grain boundary within two cells.
+        const nearGrainBoundary = (i: number) => {
+          const x0 = i % cols;
+          const y0 = Math.floor(i / cols);
+          for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (lg!.isGrainBoundary((((y0 + dy) % rows + rows) % rows) * cols + (((x0 + dx) % cols + cols) % cols))) return true;
+          return false;
+        };
+        // A smith walled in by the stock stops carving (appropriated); it escapes once a gap opens.
+        // Walled in when no solution lies within five cells; free again only once a gap opens within
+        // three, so a smith at a pocket's mouth does not flicker between the two.
+        for (const sm of smiths.list) {
+          if (!sm.walled && !openNear(sm.i, 5)) {
+            sm.walled = true;
+            happenedSet.add('walled');
+            crossingCounts['walled']++;
+          } else if (sm.walled && openNear(sm.i, 3)) {
+            sm.walled = false;
+            happenedSet.add('deserted');
+            crossingCounts['deserted']++;
+          }
+        }
+        if (warding) {
+          for (let k = bands.list.length - 1; k >= 0; k--) {
+            const b = bands.list[k];
+            // A clan idle on a surface too long seeds a small grain of its own, drawn from the solution.
+            if ((b.idle ?? 0) > SEED_AFTER && lg.neighbors(b.i).some((j) => lg!.occ[j]) && Math.random() < 0.0005 * sweeps) {
+              const o = 1 + ((Math.random() * params.orientations) | 0);
+              const x0 = b.i % cols;
+              const y0 = Math.floor(b.i / cols);
+              for (let dy = -2; dy <= 2; dy++) {
+                for (let dx = -2; dx <= 2; dx++) {
+                  if (dx * dx + dy * dy > 5) continue;
+                  const j = (((y0 + dy) % rows + rows) % rows) * cols + (((x0 + dx) % cols + cols) % cols);
+                  if (!lg.occ[j]) {
+                    lg.occ[j] = o;
+                    if (lg.reservoir) lg.reservoir.dissolved = Math.max(0, lg.reservoir.dissolved - 1);
+                  }
+                }
+              }
+              seeds.push({ i: b.i, age: 0 });
+              bands.list.splice(k, 1);
+              happenedSet.add('seeded');
+              crossingCounts['seeded']++;
+              continue;
+            }
+            // A mobilized clan at a grain boundary leaves as a smith.
+            if (smithing && mobilization > 0.3 && nearGrainBoundary(b.i) && Math.random() < 0.0015 * sweeps) {
+              smiths.list.push({ i: b.i, dir: (Math.random() * 4) | 0, trail: [], fromClan: true });
+              bands.list.splice(k, 1);
+              happenedSet.add('clanToSmith');
+              crossingCounts['clanToSmith']++;
+            }
+          }
+          // A smith with nothing to follow for long settles as a clan.
+          if (smithing) {
+            for (let k = smiths.list.length - 1; k >= 0; k--) {
+              const sm = smiths.list[k];
+              if (!sm.walled && (sm.sinceCarve ?? 0) > SETTLE_AFTER && Math.random() < 0.01 * sweeps) {
+                bands.list.push({ i: sm.i, home: sm.i, size: 1, fromSmith: true });
+                smiths.list.splice(k, 1);
+                happenedSet.add('smithToClan');
+                crossingCounts['smithToClan']++;
+              }
+            }
+          }
+        }
+        // The rarest crossing this frame is the one reported. Walling-in and desertion are common
+        // (smiths often follow boundaries deep into a stock), so they wait for a longer quiet spell.
+        const happened = (['seeded', 'smithToClan', 'clanToSmith', 'deserted', 'walled'] as Crossing[]).find((c) => happenedSet.has(c)) ?? null;
+        const quiet = happened === 'walled' || happened === 'deserted' ? 450 : 90;
+        if (happened && mode === 'conflict' && crossingAge > quiet) {
+          crossing = happened;
+          crossingAge = 0;
+        }
+      }
+      crossingAge++;
+      seeds = seeds.filter((sd) => ++sd.age < 300);
       const clusters = lg.label();
       const sizeOf = clusters.map((c) => c.size);
       solid = clusters.reduce((a, c) => a + (c.size >= threshold ? c.size : 0), 0) / lg.n;
@@ -239,10 +378,18 @@ function create(): SimInstance {
           }
           ctx.stroke();
           const [x, y] = at(s.i);
-          ctx.fillStyle = '#ec008c';
+          // A walled-in smith is the stock's now (cyan, ringed magenta); one that came from a clan
+          // keeps a yellow ring.
+          ctx.fillStyle = s.walled ? '#00aeef' : '#ec008c';
           ctx.beginPath();
           ctx.arc(x, y, sx * 0.7, 0, Math.PI * 2);
           ctx.fill();
+          const ringColor = s.walled ? '#ec008c' : s.fromClan ? '#e0a800' : null;
+          if (ringColor) {
+            ctx.strokeStyle = ringColor;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
         }
       }
 
@@ -254,7 +401,24 @@ function create(): SimInstance {
           ctx.beginPath();
           ctx.arc(x, y, sx * (0.35 + 0.35 * b.size), 0, Math.PI * 2);
           ctx.fill();
+          // A clan that came from a smith keeps a magenta ring.
+          if (b.fromSmith) {
+            ctx.strokeStyle = '#ec008c';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+          }
         }
+        // A stock seeded by a clan keeps a yellow ring for a while.
+        ctx.strokeStyle = '#e0a800';
+        ctx.lineWidth = 3;
+        for (const sd of seeds) {
+          const [x, y] = at(sd.i);
+          ctx.globalAlpha = 1 - sd.age / 300;
+          ctx.beginPath();
+          ctx.arc(x, y, sx * 3, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       }
 
       // Explain layer: each tag holds on to one feature for a few seconds and follows it.
@@ -330,6 +494,8 @@ function create(): SimInstance {
           phaseAge = 0;
         }
         cap = PHASES[phase];
+        // A line of flight, as it happens, takes the strip for a few seconds.
+        if (crossing && crossingAge < 150) cap = CROSSINGS[crossing];
       }
       const series: Narration['series'] = [];
       if (mode !== 'nonstate' || solidHistory.some((v) => v > 0)) series.push({ values: solidHistory.map((v) => v / 0.4), color: '#00aeef', label: 'stock' });
@@ -380,6 +546,7 @@ export const metallurgic: ModelDef = {
     { process: 'wardingOff', heading: '03 / Warding off', text: 'Clans: many small agents settle on clusters and block their growth, then mobilize as the stock grows and wear down the stock, since “depletion is the means by which primitive groups ward off the stock” (Plateaus: 440).' },
   ],
   legend: [
+    { swatch: '#f2f2f2', see: 'Rings around smiths, clans, or a new grain', social: 'lines of flight: a smith walled in by the stock (cyan, ringed magenta), a clan turned smith (ringed yellow), a smith settled as a clan (ringed magenta), a stock a clan seeded (a fading yellow ring)', physics: 'agents changing role; a seeded stock is nucleation on a foreign particle', atp: 'mechanisms are needed “to prevent a chief from becoming one” (Plateaus: 357)' },
     { swatch: '#64748b', see: 'Gray clusters', social: 'a nascent hierarchy, prestige that might harden into power', physics: 'nuclei below the critical size, which mostly dissolve', atp: 'formations of power kept from “taking on consistency” (Plateaus: 433)', example: 'Clastres’s chiefs, who speak but cannot command' },
     { swatch: '#00aeef', see: 'Cyan grains', social: 'a State’s stock: the granary, the treasury, the land register', physics: 'crystal past the threshold, growing from the solution', atp: 'capture: the stock, an apparatus crystallizing (Plateaus: 357, 440)', example: 'the granary or the land register' },
     { swatch: '#b8860b', see: 'Yellow dots of varied sizes', social: 'primitive groups warding off the stock: dispersal, sharing, using up the surplus', physics: 'inhibitors that bind to surfaces and block growth (as antifreeze proteins do in ice)', atp: 'warding off by depletion, objects “destroyed or depleted rather than stockpiled” (Plateaus: 440)', example: 'the exchange of seeds for axes in Plateaus, an exchange that stops at “the last” before a stock forms (437-40)' },

@@ -19,6 +19,10 @@ export interface Band {
   home: number;
   /** Reach of its blocking, in cells (1 to 3), and a multiplier on its wearing. */
   size: number;
+  /** Steps in a row without mobilizing. */
+  idle?: number;
+  /** Came from a smith (a line of flight). */
+  fromSmith?: boolean;
 }
 
 export class Bands {
@@ -136,6 +140,7 @@ export class Bands {
     lg.blocked.fill(0);
     for (const b of this.list) {
       const atom = this.surfaceNeighbor(b.i);
+      b.idle = activity < 0.15 ? (b.idle ?? 0) + 1 : 0;
       if (this.dist(b.i, b.home) > this.territory) {
         // Outside its territory: head home.
         const next = this.toward(b.i, b.home);

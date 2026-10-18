@@ -11,6 +11,14 @@ export interface Smith {
   i: number;
   dir: number;
   trail: number[];
+  /** Walled in by the stock, with no open solution in reach: it stops carving. */
+  walled?: boolean;
+  /** Steps in a row with no boundary or edge in reach to follow. */
+  idle?: number;
+  /** Came from a clan (a line of flight). */
+  fromClan?: boolean;
+  /** Steps since it last carved anything. */
+  sinceCarve?: number;
 }
 
 const TRAIL = 40;
@@ -80,11 +88,20 @@ export class Smiths {
           if (next >= 0) break;
         }
         if (next < 0) {
-          next = this.seekBy(s.i, grain) ?? this.seekBy(s.i, edge) ?? (Math.random() < 0.8 ? s.dir : (Math.random() * 4) | 0);
-        }
+          const sought = this.seekBy(s.i, grain) ?? this.seekBy(s.i, edge);
+          if (sought === null) {
+            s.idle = (s.idle ?? 0) + 1;
+            next = Math.random() < 0.8 ? s.dir : (Math.random() * 4) | 0;
+          } else {
+            s.idle = 0;
+            next = sought;
+          }
+        } else s.idle = 0;
         s.dir = next;
         s.i = nb[next];
-        if (carve > 0 && lg.occ[s.i] && edge(s.i) && Math.random() < carve) {
+        s.sinceCarve = (s.sinceCarve ?? 0) + 1;
+        if (!s.walled && carve > 0 && lg.occ[s.i] && edge(s.i) && Math.random() < carve) {
+          s.sinceCarve = 0;
           lg.occ[s.i] = 0;
           if (lg.reservoir) lg.reservoir.dissolved += 1;
           this.carved++;
